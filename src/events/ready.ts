@@ -1,17 +1,17 @@
 import { OCLClient } from '../client/OCLClient';
 import { REST, Routes } from 'discord.js';
-import { leagueCommand } from '../interactions/league/league';
 import { developerCommand } from '../interactions/developer/developer';
 import { settingsCommand } from '../interactions/settings/settings';
 import { matchCommand } from '../interactions/match/match';
 import { clanCommand } from '../interactions/clan/clan';
 import { strikeCommand } from '../interactions/moderation/strike';
 import { pollCommand } from '../interactions/utility/poll';
+import { hubCommand } from '../interactions/hub/hub';
 
 export const readyEvent = async (client: OCLClient) => {
     console.log(`[SYS] Connected cleanly as application user: ${client.user?.tag}`);
 
-    const commandCollection = [ leagueCommand, developerCommand, settingsCommand, matchCommand, clanCommand, strikeCommand, pollCommand ];
+    const commandCollection = [ developerCommand, settingsCommand, matchCommand, clanCommand, strikeCommand, pollCommand, hubCommand ];
 
     for (const cmd of commandCollection) client.commands.set(cmd.data.name, cmd);
 

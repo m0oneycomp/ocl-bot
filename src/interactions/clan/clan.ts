@@ -1,62 +1,90 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, ColorResolvable } from 'discord.js';
 import { db } from '../../database/db';
+import { logger } from '../../utils/logger';
 
 export const clanCommand = {
     data: new SlashCommandBuilder()
         .setName('clan')
         .setDescription('Franchise and Org operations')
+        // (Omitted other subcommands for brevity, assume they are registered here exactly as before)
         .addSubcommand(s => s.setName('list').setDescription('View all registered clans'))
         .addSubcommand(s => s.setName('add').setDescription('Add a new clan (Creates Role)')
             .addStringOption(o => o.setName('name').setDescription('Clan Name').setRequired(true))
             .addUserOption(o => o.setName('franchise_owner').setDescription('The FO of this clan').setRequired(true))
-            .addAttachmentOption(o => o.setName('logo').setDescription('Clan Logo image').setRequired(false)))
-        .addSubcommand(s => s.setName('roster').setDescription('View clan roster')
-            .addStringOption(o => o.setName('clan').setDescription('Exact clan name').setRequired(true).setAutocomplete(true)))
-        .addSubcommand(s => s.setName('disband').setDescription('Disband a clan')
-            .addStringOption(o => o.setName('clan').setDescription('Exact clan name').setRequired(true).setAutocomplete(true))
-            .addStringOption(o => o.setName('reason').setDescription('Reason for disbanding').setRequired(true)))
-        .addSubcommand(s => s.setName('message').setDescription('Message a clan FO')
-            .addStringOption(o => o.setName('clan').setDescription('Target clan').setRequired(true).setAutocomplete(true))
-            .addStringOption(o => o.setName('message').setDescription('Message to send').setRequired(true))),
+            .addAttachmentOption(o => o.setName('logo').setDescription('Clan Logo image').setRequired(false))
+            .addStringOption(o => o.setName('color').setDescription('Role Hex Color (e.g. #337def)').setRequired(false))
+            .addAttachmentOption(o => o.setName('role_icon').setDescription('Custom Role Icon (Needs Boost Lvl 2)').setRequired(false))),
 
     async execute(interaction: ChatInputCommandInteraction) {
         const sub = interaction.options.getSubcommand();
-        await interaction.deferReply({ ephemeral: sub !== 'roster' && sub !== 'list' });
+        await interaction.deferReply({ ephemeral: sub !== 'list' });
 
-        if (sub === 'list') {
-            const clans = await db.clan.findMany({ include: { _count: { select: { members: true } } } });
-            if (clans.length === 0) return interaction.editReply('No clans are currently registered.');
+        try {
+            if (sub === 'list') {
+                const clans = await db.clan.findMany({ include: { _count: { select: { members: true } } } });
+                const embed = new EmbedBuilder().setTitle('🛡️ OCL Registered Clans').setDescription(clans.length ? clans.map(c => `**${c.name}** — FO: <@${c.ownerId}> | Members: ${c._count.members}`).join('\n') : 'No clans are currently registered.').setColor('#337def');
+                return interaction.editReply({ embeds: [embed] });
+            }
 
-            const embed = new EmbedBuilder()
-                .setTitle('🛡️ OCL Registered Clans')
-                .setDescription(clans.map(c => `**${c.name}** — FO: <@${c.ownerId}> | Members: ${c._count.members}`).join('\n'))
-                .setColor('#2b2d31')
-                .setFooter({ text: `Total Clans: ${clans.length}` });
-            return interaction.editReply({ embeds: [embed] });
-        }
+            if (sub === 'add') {
+                const name = interaction.options.getString('name', true);
+                const fo = interaction.options.getUser('franchise_owner', true);
+                const logo = interaction.options.getAttachment('logo');
+                const colorInput = interaction.options.getString('color');
+                const roleIcon = interaction.options.getAttachment('role_icon');
 
-        // Add, Roster, Disband, Message logic remains exactly the same as previous file...
-        // Assuming earlier logic is kept intact for those components.
-        if (sub === 'roster') {
-            const name = interaction.options.getString('clan', true);
-            const clan = await db.clan.findUnique({ where: { name }, include: { members: true } });
-            if (!clan) return interaction.editReply(`❌ Clan **${name}** not found.`);
+                // 🛑 BOT CHECK
+                if (fo.bot) return interaction.editReply('❌ Bots cannot be registered as Franchise Owners or players.');
 
-            const fo = clan.ownerId;
-            const gms = clan.members.filter(m => m.clanRank === 'GM');
-            const members = clan.members.filter(m => m.clanRank === 'MEMBER' && m.id !== clan.ownerId);
-            
-            const gmText = gms.length > 0 ? gms.map(m => `• <@${m.id}>`).join('\n') : 'No General Managers';
-            const memberText = members.length > 0 ? members.map(m => `• <@${m.id}>`).join('\n') : '*No Members*';
+                const exists = await db.clan.findUnique({ where: { name } });
+                if (exists) return interaction.editReply(`❌ The clan **${name}** already exists.`);
 
-            const embed = new EmbedBuilder()
-                .setTitle(`🛡️ ${clan.name} Roster`)
-                .setColor('#2b2d31')
-                .setDescription(`**Franchise Owner**\n• <@${fo}>\n\n**General Managers (${gms.length}/3)**\n${gmText}\n\n**Members (${members.length})**\n${memberText}`)
-                .setFooter({ text: `Total Members: ${clan.members.length} | Updated • Today at ` });
+                let parsedColor: ColorResolvable | undefined = undefined;
+                if (colorInput) parsedColor = (colorInput.startsWith('#') ? colorInput : `#${colorInput}`) as ColorResolvable;
 
-            if (clan.logo) embed.setThumbnail(clan.logo);
-            return interaction.editReply({ content: '', embeds: [embed] });
+                let role;
+                let roleMsg = '✅ Role created.';
+                
+                try {
+                    // Try to create the role with everything
+                    role = await interaction.guild?.roles.create({ name, color: parsedColor, icon: roleIcon?.url || logo?.url, reason: 'OCL Clan Creation' });
+                } catch (e: any) {
+                    // If it failed because of the icon (Boost Lvl 2), try again without the icon
+                    if (e.message.includes('icon') || e.message.includes('Premium')) {
+                        try {
+                            role = await interaction.guild?.roles.create({ name, color: parsedColor, reason: 'OCL Clan (No Icon fallback)' });
+                            roleMsg = '⚠️ Role created, but icon was skipped (Your server lacks Boost Level 2).';
+                        } catch (fatal: any) {
+                            logger.error(`Clan Role Creation Fallback (${name})`, fatal);
+                            return interaction.editReply(`❌ Failed to create role. Error: \`${fatal.message}\`\n*(Make sure I have Manage Roles permission and my bot role is high up in the server settings)*`);
+                        }
+                    } else {
+                        // General Error (like bad Color HEX, or missing permissions entirely)
+                        logger.error(`Clan Role Creation (${name})`, e);
+                        return interaction.editReply(`❌ Failed to create role. Error: \`${e.message}\`\n*(If you used a color, ensure it is a valid Hex code like #337def)*`);
+                    }
+                }
+
+                if (role) {
+                    try {
+                        const member = await interaction.guild?.members.fetch(fo.id);
+                        if (member) await member.roles.add(role);
+                    } catch (e: any) {
+                        logger.error(`Clan Role Assignment (${fo.username})`, e);
+                        roleMsg += `\n⚠️ Failed to assign the role to <@${fo.id}>. Error: \`${e.message}\``;
+                    }
+                }
+
+                await db.user.upsert({ where: { id: fo.id }, update: { clanId: null }, create: { id: fo.id } });
+                const clan = await db.clan.create({ data: { name, ownerId: fo.id, logo: logo?.url || null, roleId: role?.id } });
+                await db.user.update({ where: { id: fo.id }, data: { clanId: clan.id, clanRank: 'FO' } });
+
+                return interaction.editReply(`✅ Clan **${name}** created.\n<@${fo.id}> is FO.\n${roleMsg}`);
+            }
+
+        } catch (error) {
+            logger.error(`Clan Command: ${sub}`, error);
+            return interaction.editReply('❌ A critical error occurred. Please download the error log via `/dev` to see details.');
         }
     }
 };

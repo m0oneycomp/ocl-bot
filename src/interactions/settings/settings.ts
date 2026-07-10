@@ -11,18 +11,20 @@ export const settingsCommand = {
             return interaction.reply({ content: '❌ You do not have permission to access the settings matrix.', ephemeral: true });
         }
 
-        // Fetch LIVE data from the database
         const settings = await db.settings.findUnique({ where: { id: 'global' } });
         const win = settings?.winPoints ?? 25;
+        const lose = settings?.losePoints ?? 0;
         const kill = settings?.killPoints ?? 5;
         const roverStatus = settings?.roverEnabled ? 'ENABLED' : 'DISABLED';
 
         const embed = new EmbedBuilder()
-            .setTitle('⚙️ OCL Utilities Configuration Portal')
+            .setTitle('⚙️ OCL Configuration Portal')
             .setDescription('Select an administrative subsystem category below to modify settings dynamically.')
-            .setColor('#2b2d31')
+            .setColor('#337def') // Brand Color
+            .setThumbnail('https://i.imgur.com/f5LGesj.png') // 1:1 Logo
+            .setImage('https://i.imgur.com/KvxOH6m.png') // 16:9 Banner
             .addFields(
-                { name: '📊 Current Points Mode', value: `Base Win: \`+${win}\` | 1 Kill: \`+${kill}\``, inline: true },
+                { name: '📊 Current Points Mode', value: `Base Win: \`+${win}\` | Base Loss: \`${lose > 0 ? '+' : ''}${lose}\` | 1 Kill: \`+${kill}\``, inline: true },
                 { name: '🔒 RoVer Integration', value: `Verification: \`${roverStatus}\``, inline: true }
             );
 

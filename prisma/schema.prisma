@@ -9,6 +9,7 @@ datasource db {
 model Settings {
   id              String  @id @default("global")
   winPoints       Int     @default(25)
+  losePoints      Int     @default(0)
   killPoints      Int     @default(5)
   seniorModRoleId String?
   roverApiKey     String?
@@ -45,7 +46,16 @@ model Clan {
   roleId        String?   
   logo          String?   
   members       User[]
+  requests      ClanRequest[]
   createdAt     DateTime  @default(now())
+}
+
+model ClanRequest {
+  id        String   @id @default(uuid())
+  userId    String
+  clanId    String
+  createdAt DateTime @default(now())
+  clan      Clan     @relation(fields: [clanId], references: [id], onDelete: Cascade)
 }
 
 model Match {
