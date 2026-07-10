@@ -1,0 +1,14 @@
+# Node modules
+node_modules/
+npm-debug.log
+
+# Environment variables (NEVER PUSH THIS)
+.env
+.env.local
+
+# Compiled TypeScript
+dist/
+
+# OS files
+.DS_Store
+Thumbs.db

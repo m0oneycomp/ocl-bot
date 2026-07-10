@@ -1,0 +1,92 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Settings {
+  id              String  @id @default("global")
+  winPoints       Int     @default(25)
+  killPoints      Int     @default(5)
+  seniorModRoleId String?
+  roverApiKey     String?
+  roverEnabled    Boolean @default(true)
+}
+
+model User {
+  id            String    @id
+  robloxId      String?   @unique
+  elo           Int       @default(1200)
+  points        Int       @default(0)
+  activeLeague  String?   
+  clanId        String?
+  clanRank      String    @default("MEMBER")
+  clan          Clan?     @relation(fields: [clanId], references: [id])
+  matches       MatchPlayer[]
+}
+
+model League {
+  id            String    @id @default(uuid())
+  hostId        String
+  channelId     String
+  threadId      String?
+  status        String    @default("PENDING") 
+  capacity      Int       @default(10)
+  createdAt     DateTime  @default(now())
+  matches       Match[]
+}
+
+model Clan {
+  id            String    @id @default(uuid())
+  name          String    @unique
+  ownerId       String    
+  roleId        String?   
+  logo          String?   
+  members       User[]
+  createdAt     DateTime  @default(now())
+}
+
+model Match {
+  id            String    @id @default(uuid())
+  leagueId      String
+  league        League    @relation(fields: [leagueId], references: [id])
+  status        String    @default("AWAITING_PROOF") 
+  players       MatchPlayer[]
+}
+
+model MatchPlayer {
+  id            String    @id @default(uuid())
+  matchId       String
+  userId        String
+  kills         Int       @default(0)
+  win           Boolean
+  match         Match     @relation(fields: [matchId], references: [id])
+  user          User      @relation(fields: [userId], references: [id])
+}
+
+model Strike {
+  id        String   @id @default(uuid())
+  reason    String
+  userId    String?
+  clanName  String?
+  createdAt DateTime @default(now())
+}
+
+model Poll {
+  id        String     @id @default(uuid())
+  question  String
+  active    Boolean    @default(true)
+  creatorId String
+  createdAt DateTime   @default(now())
+  votes     PollVote[]
+}
+
+model PollVote {
+  id        String   @id @default(uuid())
+  pollId    String
+  userId    String
+  choice    String
+  poll      Poll     @relation(fields: [pollId], references: [id], onDelete: Cascade)
+}
