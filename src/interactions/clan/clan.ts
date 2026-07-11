@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, ColorResolvable, GuildMember } from 'discord.js';
 import { db } from '../../database/db';
-import { verifyUserRoblox } from '../../services/rover';
+import { verifyPlayer } from '../../services/verification';
 import { logger } from '../../utils/logger';
 
 export const clanCommand = {
@@ -10,6 +10,7 @@ export const clanCommand = {
         .addSubcommand(s => s.setName('list').setDescription('View all registered clans'))
         .addSubcommand(s => s.setName('roster').setDescription('View a clan roster').addStringOption(o => o.setName('clan').setDescription('Exact clan name').setRequired(true).setAutocomplete(true)))
         .addSubcommand(s => s.setName('request').setDescription('Request to join a clan').addStringOption(o => o.setName('clan').setDescription('Target clan').setRequired(true).setAutocomplete(true)))
+        .addSubcommand(s => s.setName('leave').setDescription('Resign from your current clan'))
         .addSubcommand(s => s.setName('requests').setDescription('View pending applications to your clan'))
         .addSubcommand(s => s.setName('accept').setDescription('Accept a player into your clan').addUserOption(o => o.setName('user').setDescription('Applicant to accept').setRequired(true)))
         .addSubcommand(s => s.setName('deny').setDescription('Deny a player').addUserOption(o => o.setName('user').setDescription('Applicant to deny').setRequired(true)))
@@ -24,12 +25,11 @@ export const clanCommand = {
             .addStringOption(o => o.setName('color').setDescription('Role Hex (e.g. #337def) or Color Word').setRequired(false))
             .addAttachmentOption(o => o.setName('role_icon').setDescription('Custom Role Icon (Needs Boost Lvl 2)').setRequired(false)))
         .addSubcommand(s => s.setName('disband').setDescription('Disband a clan').addStringOption(o => o.setName('clan').setDescription('Exact clan name').setRequired(true).setAutocomplete(true)).addStringOption(o => o.setName('reason').setDescription('Reason').setRequired(true)))
-        .addSubcommand(s => s.setName('leave').setDescription('Resign from your current clan'))
         .addSubcommand(s => s.setName('message').setDescription('Message a clan FO').addStringOption(o => o.setName('clan').setDescription('Target clan').setRequired(true).setAutocomplete(true)).addStringOption(o => o.setName('message').setDescription('Message to send').setRequired(true))),
 
     async execute(interaction: ChatInputCommandInteraction) {
         const sub = interaction.options.getSubcommand();
-        await interaction.deferReply({ ephemeral: !['roster', 'list'].includes(sub) });
+        await interaction.deferReply({ ephemeral: true });
 
         try {
             const executorUser = await db.user.upsert({ where: { id: interaction.user.id }, update: {}, create: { id: interaction.user.id }, include: { clan: true } });
@@ -62,7 +62,8 @@ export const clanCommand = {
                 return interaction.editReply({ content: '', embeds: [embed] });
             }
 
-if (sub === 'leave') {
+            if (sub === 'leave') {
+                if (!executorUser.clanId) return interaction.editReply('❌ You are not in a clan.');
                 if (executorUser.clanRank === 'FO') return interaction.editReply('❌ Franchise Owners cannot leave. You must transfer ownership first or disband.');
                 await db.user.update({ where: { id: interaction.user.id }, data: { clanId: null, clanRank: 'MEMBER' } });
                 if (executorUser.clan?.roleId) {
@@ -75,9 +76,12 @@ if (sub === 'leave') {
                 if (executorUser.clanId) return interaction.editReply('❌ You are already in a clan.');
                 const clan = await db.clan.findUnique({ where: { name: interaction.options.getString('clan', true) } });
                 if (!clan) return interaction.editReply('❌ Clan not found.');
+                
+                // 🔥 Now using the master gatekeeper
                 const memberRoles = (interaction.member as GuildMember).roles.cache.map(r => r.id);
-                const roverCheck = await verifyUserRoblox(interaction.user.id, interaction.guildId!, memberRoles);
-                if (!roverCheck.verified) return interaction.editReply(`❌ ${roverCheck.message}`);
+                const authCheck = await verifyPlayer(interaction.user.id, interaction.guildId!, memberRoles);
+                if (!authCheck.verified) return interaction.editReply(`❌ ${authCheck.message}`);
+                
                 const existingReq = await db.clanRequest.findFirst({ where: { userId: interaction.user.id, clanId: clan.id } });
                 if (existingReq) return interaction.editReply('❌ You already have a pending application for this clan.');
                 await db.clanRequest.create({ data: { userId: interaction.user.id, clanId: clan.id } });
@@ -182,16 +186,15 @@ if (sub === 'leave') {
                     const colorInput = interaction.options.getString('color');
                     const roleIcon = interaction.options.getAttachment('role_icon');
                     
-                    // 🧠 Smart Color Parser
                     let parsedColor: ColorResolvable | undefined = undefined;
                     if (colorInput) {
                         const cleanInput = colorInput.trim();
                         if (/^[0-9A-Fa-f]{6}$/i.test(cleanInput)) {
-                            parsedColor = `#${cleanInput}` as ColorResolvable; // e.g. ff0000 -> #ff0000
+                            parsedColor = `#${cleanInput}` as ColorResolvable;
                         } else if (cleanInput.startsWith('#')) {
-                            parsedColor = cleanInput as ColorResolvable; // e.g. #ff0000
+                            parsedColor = cleanInput as ColorResolvable;
                         } else {
-                            parsedColor = (cleanInput.charAt(0).toUpperCase() + cleanInput.slice(1).toLowerCase()) as ColorResolvable; // e.g. blue -> Blue
+                            parsedColor = (cleanInput.charAt(0).toUpperCase() + cleanInput.slice(1).toLowerCase()) as ColorResolvable;
                         }
                     }
 
