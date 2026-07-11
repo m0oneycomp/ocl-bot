@@ -1,38 +1,104 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } from 'discord.js';
-import os from 'os';
+import { SlashCommandBuilder, ChatInputCommandInteraction, PermissionFlagsBits } from 'discord.js';
+
+// CONSTANT: Replace this with your exact personal Discord User ID
+const AUTHORIZED_DEVELOPER_ID = '1197110500333469720'; 
 
 export const developerCommand = {
     data: new SlashCommandBuilder()
         .setName('dev')
-        .setDescription('Root Developer Dashboard'),
+        .setDescription('Developer core execution utilities')
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator) // Hides from regular users in UI
+        .addSubcommand(s => s
+            .setName('ai')
+            .setDescription('Exclusive developer AI utility agent')
+            .addStringOption(o => o.setName('prompt').setDescription('Instructions or queries for the bot agent').setRequired(true))
+            .addStringOption(o => o.setName('link').setDescription('Optional Discord message link to provide context').setRequired(false))),
 
     async execute(interaction: ChatInputCommandInteraction) {
-        if (!interaction.memberPermissions?.has('Administrator')) return interaction.reply({ content: '⛔ Unauthorized.', ephemeral: true });
+        // STRICT SECURITY GATEKEEPER: Absolute denial for anyone except you
+        if (interaction.user.id !== AUTHORIZED_DEVELOPER_ID) {
+            return interaction.reply({ content: '❌ Unknown command or insufficient permissions.', ephemeral: true });
+        }
 
-        const ramTotal = (os.totalmem() / 1024 / 1024 / 1024).toFixed(2);
-        const ramFree = (os.freemem() / 1024 / 1024 / 1024).toFixed(2);
+        const sub = interaction.options.getSubcommand();
 
-        const embed = new EmbedBuilder()
-            .setTitle('👨‍💻 OCL Developer & System Dashboard')
-            .setDescription('**Warning:** Destructive actions bypass standard confirmation guards.')
-            .setColor('#337def')
-            .addFields(
-                { name: '🖥️ Host System', value: `RAM: ${ramFree}GB / ${ramTotal}GB Free`, inline: true },
-                { name: '📦 Database', value: `Status: Connected (Prisma)`, inline: true }
-            );
+        if (sub === 'ai') {
+            await interaction.deferReply({ ephemeral: true });
+            
+            const prompt = interaction.options.getString('prompt', true);
+            const contextLink = interaction.options.getString('link');
+            const apiKey = process.env.GEMINI_API_KEY;
 
-        const toolSelect = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
-            new StringSelectMenuBuilder()
-                .setCustomId('dev_tools')
-                .setPlaceholder('Select a maintenance tool...')
-                .addOptions(
-                    new StringSelectMenuOptionBuilder().setLabel('Download Error Logs').setValue('download_logs').setEmoji('📄'),
-                    new StringSelectMenuOptionBuilder().setLabel('Wipe All Polls').setValue('wipe_polls').setEmoji('🗑️'),
-                    new StringSelectMenuOptionBuilder().setLabel('Clear Entry Channel').setValue('clear_entry').setEmoji('🧹'),
-                    new StringSelectMenuOptionBuilder().setLabel('Sync All Ranks').setValue('sync_ranks').setEmoji('🔄')
-                )
-        );
+            if (!apiKey) {
+                return interaction.editReply('❌ System configuration error: `GEMINI_API_KEY` is missing from the environment variables.');
+            }
 
-        await interaction.reply({ embeds: [embed], components: [toolSelect], ephemeral: true });
+            let groundedContext = '';
+
+            // Message Link Context Parser
+            if (contextLink) {
+                const messageUrlRegex = /discord\.com\/channels\/(\d+)\/(\d+)\/(\d+)/;
+                const match = contextLink.match(messageUrlRegex);
+
+                if (match) {
+                    const [, , channelId, messageId] = match;
+                    try {
+                        const channel = await interaction.guild?.channels.fetch(channelId);
+                        if (channel && 'messages' in channel) {
+                            const targetMessage = await channel.messages.fetch(messageId);
+                            groundedContext = `[Context Message from @${targetMessage.author.username} in #${channel.name}]:\n"${targetMessage.content}"\n\n`;
+                        }
+                    } catch (fetchError) {
+                        return interaction.editReply('⚠️ Unable to retrieve context message. Ensure the link is valid and the bot has access to that channel.');
+                    }
+                } else {
+                    return interaction.editReply('❌ Invalid Discord message link format provided.');
+                }
+            }
+
+            // Construct System Directives & Contextual Payload
+            const systemInstruction = "You are a specialized developer assistant built directly inside a Discord management bot. You analyze system issues, inspect message contexts, and provide strategic instructions on how to maintain, patch, or configure the application.";
+            
+            const fullPromptPayload = `${systemInstruction}\n\n${groundedContext}Developer Request: ${prompt}`;
+
+            try {
+                // Native Fetch request to the Gemini API endpoint
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{ text: fullPromptPayload }]
+                        }]
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    return interaction.editReply(`❌ Gemini API connection failure: Status ${response.status} - ${errorData?.error?.message || 'Unknown error'}`);
+                }
+
+                const data = await response.json();
+                const aiOutput = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (!aiOutput) {
+                    return interaction.editReply('❌ Received an empty response signature from the AI cluster.');
+                }
+
+                // Split long responses safely to remain within Discord text limitations
+                if (aiOutput.length > 2000) {
+                    const chunks = aiOutput.match(/[\s\S]{1,1900}/g) || [];
+                    await interaction.editReply(chunks[0]);
+                    for (let i = 1; i < chunks.length; i++) {
+                        await interaction.followUp({ content: chunks[i], ephemeral: true });
+                    }
+                } else {
+                    await interaction.editReply(aiOutput);
+                }
+
+            } catch (apiError) {
+                await interaction.editReply('❌ A critical network exception occurred while routing data to the AI runtime engine.');
+            }
+        }
     }
 };
