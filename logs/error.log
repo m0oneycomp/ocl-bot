@@ -1,0 +1,8 @@
+[2026-07-11T01:32:41.990Z] [Clan Add] ERROR:
+DiscordjsTypeError [ColorConvert]: Unable to convert "#Blue" to a number.
+    at resolveColor (/home/mooneycomp/discord/bots/ocl/ocl-utilities/node_modules/discord.js/src/util/Util.js:299:11)
+    at RoleManager.create (/home/mooneycomp/discord/bots/ocl/ocl-utilities/node_modules/discord.js/src/managers/RoleManager.js:205:24)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async Object.execute (/home/mooneycomp/discord/bots/ocl/ocl-utilities/src/interactions/clan/clan.ts:181:32)
+    at async interactionCreateEvent (/home/mooneycomp/discord/bots/ocl/ocl-utilities/src/events/interactionCreate.ts:19:13)
+
