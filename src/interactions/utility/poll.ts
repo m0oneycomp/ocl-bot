@@ -32,7 +32,7 @@ export const pollCommand = {
                 new ButtonBuilder().setCustomId(`poll_vote_No_${poll.id}`).setLabel('No').setStyle(ButtonStyle.Danger)
             );
 
-            await interaction.reply({ embeds: [embed], components: [row] });
+            await interaction.reply({ content: '✅ Poll created.', ephemeral: true }); await interaction.channel?.send({ embeds: [embed], components: [row] });
         }
 
         if (sub === 'results' || sub === 'end') {

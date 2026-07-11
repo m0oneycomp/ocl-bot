@@ -39,7 +39,7 @@ export const hubCommand = {
                     { name: '⚠️ Standing', value: strikes > 0 ? `${strikes} Active Strikes` : 'Clean Record', inline: true }
                 );
 
-            return interaction.reply({ embeds: [embed] });
+            return interaction.reply({ embeds: [embed], ephemeral: true });
         }
 
         if (sub === 'leaderboard') {
@@ -63,7 +63,7 @@ export const hubCommand = {
                 .setThumbnail('https://i.imgur.com/f5LGesj.png') // 1:1 Logo
                 .setTimestamp();
 
-            return interaction.reply({ embeds: [embed] });
+            return interaction.reply({ embeds: [embed], ephemeral: true });
         }
     }
 };

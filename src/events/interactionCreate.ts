@@ -3,6 +3,7 @@ import { OCLClient } from '../client/OCLClient';
 import { db } from '../database/db';
 import { verifyUserRoblox } from '../services/rover';
 import { logger } from '../utils/logger';
+import { logCommand } from '../utils/commandLogger';
 import fs from 'fs';
 
 export const interactionCreateEvent = async (client: OCLClient, interaction: Interaction) => {
@@ -16,6 +17,9 @@ export const interactionCreateEvent = async (client: OCLClient, interaction: Int
         if (interaction.isChatInputCommand()) {
             const command = client.commands.get(interaction.commandName);
             if (!command) return;
+            
+            // 🚨 Secretly log the command before executing it
+            await logCommand(interaction);
             await command.execute(interaction);
         } 
         
