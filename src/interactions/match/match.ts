@@ -30,19 +30,34 @@ export const matchCommand = {
 
         if (sub === 'host') {
             const gameType = interaction.options.getString('gametype', true);
+            
+            // STRICT CHANNEL ENFORCEMENT
+            let requiredChannelId = null;
+            if (gameType === 'Ranked') requiredChannelId = settings?.rankedChannelId;
+            else if (gameType === 'League') requiredChannelId = settings?.leagueChannelId;
+            else if (gameType === 'Scrim') requiredChannelId = settings?.scrimChannelId;
+            else if (gameType === 'Casual') requiredChannelId = settings?.casualChannelId;
+
+            // BUG FIX: If the admin hasn't set the channel yet, lock it down entirely.
+            if (!requiredChannelId) {
+                return interaction.reply({ content: `❌ The designated channel for **${gameType}** matches has not been configured yet. An admin must set this up in \`/settings\` -> \`Match Deployment Channels\`.`, ephemeral: true });
+            }
+
+            if (interaction.channelId !== requiredChannelId) {
+                return interaction.reply({ content: `❌ **${gameType}** matches can only be hosted in <#${requiredChannelId}>.`, ephemeral: true });
+            }
+
+            const existingQueue = await db.league.findFirst({ where: { channelId: interaction.channelId, status: { in: ['PENDING', 'ACTIVE'] } } });
+            if (existingQueue) return interaction.reply({ content: '❌ There is already an ongoing match in this channel. Finish or cancel it first.', ephemeral: true });
+
             const matchType = interaction.options.getString('matchtype', true);
             const region = interaction.options.getString('region', true);
             const vipServer = interaction.options.getString('vipserver');
 
-            const existing = await db.league.findFirst({ where: { hostId: interaction.user.id, status: 'PENDING' } });
-            if (existing) return interaction.reply({ content: '❌ You are already hosting a pending match.', ephemeral: true });
-
-            // Calculate capacity (e.g. 5v5 -> 10)
             const teamSize = parseInt(matchType.split('v')[0]);
             const capacity = teamSize * 2;
 
             const league = await db.league.create({ data: { hostId: interaction.user.id, channelId: interaction.channelId, gameType, matchType, region, vipServer, capacity } });
-            
             await interaction.reply({ content: '✅ Queue deployed.', ephemeral: true });
 
             const embed = new EmbedBuilder()
@@ -60,8 +75,8 @@ export const matchCommand = {
         }
 
         if (sub === 'teams') {
-            const league = await db.league.findFirst({ where: { hostId: interaction.user.id, status: 'PENDING' } });
-            if (!league) return interaction.reply({ content: '❌ No pending match found.', ephemeral: true });
+            const league = await db.league.findFirst({ where: { channelId: interaction.channelId, status: 'PENDING' } });
+            if (!league) return interaction.reply({ content: '❌ No pending match found in this channel.', ephemeral: true });
 
             const players = await db.user.findMany({ where: { activeLeague: league.id } });
             if (players.length < league.capacity && !member.permissions.has('Administrator')) {
@@ -73,7 +88,6 @@ export const matchCommand = {
             const teamA = shuffled.slice(0, mid);
             const teamB = shuffled.slice(mid);
             
-            // Assign active teams in DB for the report system
             for (const p of teamA) await db.user.update({ where: { id: p.id }, data: { activeTeam: 'A' } });
             for (const p of teamB) await db.user.update({ where: { id: p.id }, data: { activeTeam: 'B' } });
             
@@ -92,8 +106,8 @@ export const matchCommand = {
         }
 
         if (sub === 'report') {
-            const league = await db.league.findFirst({ where: { hostId: interaction.user.id, status: 'ACTIVE' } });
-            if (!league) return interaction.reply({ content: '❌ You do not have an ACTIVE match to report.', ephemeral: true });
+            const league = await db.league.findFirst({ where: { channelId: interaction.channelId, status: 'ACTIVE' } });
+            if (!league) return interaction.reply({ content: '❌ No ACTIVE match in this channel to report.', ephemeral: true });
 
             const winner = interaction.options.getString('winner', true);
             const players = await db.user.findMany({ where: { activeLeague: league.id } });
@@ -111,12 +125,11 @@ export const matchCommand = {
                     where: { id: p.id },
                     data: {
                         points: { increment: ptsToAdd },
-                        elo: { increment: isWinner ? 15 : -10 }, // Basic Elo scaling
+                        elo: { increment: isWinner ? 15 : -10 },
                         activeLeague: null,
                         activeTeam: null
                     }
                 });
-
                 await db.matchPlayer.create({ data: { matchId: matchRecord.id, userId: p.id, win: isWinner } });
             }
 
@@ -125,11 +138,11 @@ export const matchCommand = {
         }
 
         if (sub === 'cancel') {
-            const league = await db.league.findFirst({ where: { hostId: interaction.user.id, status: { in: ['PENDING', 'ACTIVE'] } } });
-            if (!league) return interaction.reply({ content: '❌ No active match found.', ephemeral: true });
+            const league = await db.league.findFirst({ where: { channelId: interaction.channelId, status: { in: ['PENDING', 'ACTIVE'] } } });
+            if (!league) return interaction.reply({ content: '❌ No active match in this channel to cancel.', ephemeral: true });
             await db.user.updateMany({ where: { activeLeague: league.id }, data: { activeLeague: null, activeTeam: null } });
             await db.league.delete({ where: { id: league.id } });
-            await interaction.reply({ content: '✅ Match destroyed without point distribution.', ephemeral: true });
+            await interaction.reply({ content: '✅ Match completely scrubbed and destroyed.', ephemeral: true });
         }
 
         if (sub === 'sub') {
@@ -137,25 +150,25 @@ export const matchCommand = {
             const playerIn = interaction.options.getUser('in', true);
             
             const dbOut = await db.user.findUnique({ where: { id: playerOut.id } });
-            if (!dbOut?.activeLeague) return interaction.reply({ content: '❌ The outgoing player is not in an active match.', ephemeral: true });
+            if (!dbOut?.activeLeague) return interaction.reply({ content: '❌ The outgoing player is not currently in an active match.', ephemeral: true });
 
             await db.user.update({ where: { id: playerOut.id }, data: { activeLeague: null, activeTeam: null } });
             await db.user.upsert({ where: { id: playerIn.id }, update: { activeLeague: dbOut.activeLeague, activeTeam: dbOut.activeTeam }, create: { id: playerIn.id, activeLeague: dbOut.activeLeague, activeTeam: dbOut.activeTeam } });
             
-            await interaction.reply({ content: `🔁 Substituted <@${playerOut.id}> out for <@${playerIn.id}>. The new player inherited their team slot.`, ephemeral: true });
+            await interaction.reply({ content: `🔁 Substituted <@${playerOut.id}> out for <@${playerIn.id}>. They inherited the slot.`, ephemeral: true });
         }
         
         if (sub === 'forcejoin') {
             const target = interaction.options.getUser('user', true);
-            const league = await db.league.findFirst({ where: { hostId: interaction.user.id, status: 'PENDING' } });
-            if (!league) return interaction.reply({ content: '❌ You must be hosting a pending queue.', ephemeral: true });
+            const league = await db.league.findFirst({ where: { channelId: interaction.channelId, status: 'PENDING' } });
+            if (!league) return interaction.reply({ content: '❌ No pending queue in this channel to insert into.', ephemeral: true });
             await db.user.upsert({ where: { id: target.id }, update: { activeLeague: league.id }, create: { id: target.id, activeLeague: league.id }});
             return interaction.reply({ content: `✅ Forced <@${target.id}> into queue.`, ephemeral: true });
         }
         if (sub === 'forceleave') {
             const target = interaction.options.getUser('user', true);
             await db.user.updateMany({ where: { id: target.id }, data: { activeLeague: null, activeTeam: null } });
-            return interaction.reply({ content: `👢 Kicked <@${target.id}> from queues.`, ephemeral: true });
+            return interaction.reply({ content: `👢 Kicked <@${target.id}> from all queues.`, ephemeral: true });
         }
     }
 };
