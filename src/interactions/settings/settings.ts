@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, SectionBuilder, TextDisplayBuilder, SeparatorBuilder, MediaGalleryBuilder, MediaGalleryItemBuilder } from 'discord.js';
 import { db } from '../../database/db';
 
 export const settingsCommand = {
@@ -10,14 +10,25 @@ export const settingsCommand = {
         if (!interaction.memberPermissions?.has('Administrator')) return interaction.reply({ content: '❌ Unauthorized.', ephemeral: true });
 
         const settings = await db.settings.findUnique({ where: { id: 'global' } });
-        const embed = new EmbedBuilder()
-            .setTitle('⚙️ OCL Configuration Portal')
-            .setDescription('Select an administrative subsystem category below to modify settings dynamically.')
-            .setColor('#337def') 
-            .setImage('https://i.imgur.com/KvxOH6m.png') // Banner ONLY
-            .addFields(
-                { name: '📊 Current Points Mode', value: `Base Win: \`+${settings?.winPoints ?? 25}\` | Base Loss: \`${(settings?.losePoints ?? 0) > 0 ? '+' : ''}${settings?.losePoints ?? 0}\` | 1 Kill: \`+${settings?.killPoints ?? 5}\``, inline: true },
-                { name: '🔒 RoVer Integration', value: `Verification: \`${settings?.roverEnabled ? 'ENABLED' : 'DISABLED'}\``, inline: true }
+        
+        const header = new SectionBuilder()
+            .addTextDisplayComponents(
+                new TextDisplayBuilder().setContent('# ⚙️ OCL Configuration Portal'),
+                new TextDisplayBuilder().setContent('Select an administrative subsystem category below to modify settings dynamically.')
+            );
+
+        const banner = new MediaGalleryBuilder().addItems(
+            new MediaGalleryItemBuilder().setURL('https://i.imgur.com/KvxOH6m.png')
+        );
+
+        const divider = new SeparatorBuilder().setDivider(true);
+
+        const info = new SectionBuilder()
+            .addTextDisplayComponents(
+                new TextDisplayBuilder().setContent('**📊 Points Mode**'),
+                new TextDisplayBuilder().setContent(`Win: \`+${settings?.winPoints ?? 25}\` | Loss: \`${(settings?.losePoints ?? 0) > 0 ? '+' : ''}${settings?.losePoints ?? 0}\` | Kill: \`+${settings?.killPoints ?? 5}\``),
+                new TextDisplayBuilder().setContent('\n**🔒 RoVer Integration**'),
+                new TextDisplayBuilder().setContent(`Verification: \`${settings?.roverEnabled ? 'ENABLED' : 'DISABLED'}\``)
             );
 
         const select = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
@@ -27,6 +38,8 @@ export const settingsCommand = {
                 new StringSelectMenuOptionBuilder().setLabel('RoVer API Settings').setValue('config_rover').setEmoji('🔗')
             )
         );
-        await interaction.reply({ embeds: [embed], components: [select], ephemeral: true });
+
+        // Deploying purely via V2 Components (No embeds)
+        await interaction.reply({ components: [header, banner, divider, info, select] as any[], ephemeral: true });
     }
 };
