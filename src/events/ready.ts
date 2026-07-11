@@ -7,11 +7,12 @@ import { clanCommand } from '../interactions/clan/clan';
 import { strikeCommand } from '../interactions/moderation/strike';
 import { pollCommand } from '../interactions/utility/poll';
 import { hubCommand } from '../interactions/hub/hub';
+import { hicomCommand } from '../interactions/moderation/hicom';
 
 export const readyEvent = async (client: OCLClient) => {
     console.log(`[SYS] Connected cleanly as application user: ${client.user?.tag}`);
 
-    const commandCollection = [ developerCommand, settingsCommand, matchCommand, clanCommand, strikeCommand, pollCommand, hubCommand ];
+    const commandCollection = [ developerCommand, settingsCommand, matchCommand, clanCommand, strikeCommand, pollCommand, hubCommand, hicomCommand ];
 
     for (const cmd of commandCollection) client.commands.set(cmd.data.name, cmd);
 

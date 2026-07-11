@@ -11,6 +11,7 @@ model Settings {
   winPoints       Int     @default(25)
   losePoints      Int     @default(0)
   killPoints      Int     @default(5)
+  hiComRoleId     String? // Added for HiCom Bypass
   seniorModRoleId String?
   roverApiKey     String?
   roverEnabled    Boolean @default(true)

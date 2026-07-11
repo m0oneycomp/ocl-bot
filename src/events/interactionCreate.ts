@@ -21,7 +21,6 @@ export const interactionCreateEvent = async (client: OCLClient, interaction: Int
         
         else if (interaction.isButton()) {
             if (interaction.customId.startsWith('join_match_')) {
-                // ... (Match join logic remains identical)
                 await interaction.deferReply({ ephemeral: true });
                 const leagueId = interaction.customId.replace('join_match_', '');
                 const league = await db.league.findUnique({ where: { id: leagueId } });
@@ -30,9 +29,11 @@ export const interactionCreateEvent = async (client: OCLClient, interaction: Int
                 if (user.activeLeague) return interaction.editReply('❌ You are already in an active match queue.');
                 const playerCount = await db.user.count({ where: { activeLeague: leagueId } });
                 if (playerCount >= league.capacity) return interaction.editReply('❌ This match is completely full (10/10).');
+                
                 const memberRoles = (interaction.member as GuildMember).roles.cache.map(r => r.id);
                 const roverCheck = await verifyUserRoblox(interaction.user.id, interaction.guildId!, memberRoles);
                 if (!roverCheck.verified) return interaction.editReply(`❌ ${roverCheck.message}`);
+                
                 await db.user.update({ where: { id: interaction.user.id }, data: { activeLeague: leagueId } });
                 const newCount = playerCount + 1;
                 const originalEmbed = EmbedBuilder.from(interaction.message.embeds[0]);
@@ -69,9 +70,8 @@ export const interactionCreateEvent = async (client: OCLClient, interaction: Int
                     if (fs.existsSync('logs/error.log')) {
                         const file = new AttachmentBuilder('logs/error.log');
                         return interaction.reply({ content: '📄 **Here is your requested Error Log.**', files: [file], ephemeral: true });
-                    } else {
-                        return interaction.reply({ content: '🧹 No errors have been recorded yet!', ephemeral: true });
                     }
+                    return interaction.reply({ content: '🧹 No errors have been recorded yet!', ephemeral: true });
                 }
                 return interaction.reply({ content: `💻 Executing Dev Operation: **${selected}**`, ephemeral: true });
             }
@@ -79,9 +79,20 @@ export const interactionCreateEvent = async (client: OCLClient, interaction: Int
             if (interaction.customId === 'settings_selector') {
                 const s = interaction.values[0];
                 const set = await db.settings.findUnique({ where: { id: 'global' } });
+                
                 if (s === 'config_points') {
                     const m = new ModalBuilder().setCustomId('modal_points').setTitle('Edit Points');
                     m.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('w').setLabel('Win').setStyle(TextInputStyle.Short).setValue(set?.winPoints.toString()||'25')), new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('l').setLabel('Loss').setStyle(TextInputStyle.Short).setValue(set?.losePoints.toString()||'0')), new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('k').setLabel('Kill').setStyle(TextInputStyle.Short).setValue(set?.killPoints.toString()||'5')));
+                    return interaction.showModal(m);
+                }
+                else if (s === 'config_roles') {
+                    const m = new ModalBuilder().setCustomId('modal_roles').setTitle('Role Hierarchy');
+                    m.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('r').setLabel('HiCom Role ID').setStyle(TextInputStyle.Short).setValue(set?.hiComRoleId||'1525333690723471442').setRequired(true)));
+                    return interaction.showModal(m);
+                }
+                else if (s === 'config_rover') {
+                    const m = new ModalBuilder().setCustomId('modal_rover').setTitle('RoVer API');
+                    m.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('k').setLabel('API Key').setStyle(TextInputStyle.Short).setValue(set?.roverApiKey||'').setRequired(true)), new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('t').setLabel('Enabled (true/false)').setStyle(TextInputStyle.Short).setValue(set?.roverEnabled?'true':'false').setRequired(true)));
                     return interaction.showModal(m);
                 }
             }
@@ -91,11 +102,20 @@ export const interactionCreateEvent = async (client: OCLClient, interaction: Int
                 await db.settings.upsert({ where: { id: 'global' }, update: { winPoints: parseInt(interaction.fields.getTextInputValue('w')), losePoints: parseInt(interaction.fields.getTextInputValue('l')), killPoints: parseInt(interaction.fields.getTextInputValue('k')) }, create: { id: 'global', winPoints: parseInt(interaction.fields.getTextInputValue('w')), losePoints: parseInt(interaction.fields.getTextInputValue('l')), killPoints: parseInt(interaction.fields.getTextInputValue('k')) }});
                 return interaction.reply({ content: '✅ Points saved.', ephemeral: true });
             }
+            else if (interaction.customId === 'modal_roles') {
+                await db.settings.upsert({ where: { id: 'global' }, update: { hiComRoleId: interaction.fields.getTextInputValue('r') }, create: { id: 'global', hiComRoleId: interaction.fields.getTextInputValue('r') }});
+                return interaction.reply({ content: '✅ HiCom Role saved.', ephemeral: true });
+            }
+            else if (interaction.customId === 'modal_rover') {
+                const e = interaction.fields.getTextInputValue('t').toLowerCase() === 'true';
+                await db.settings.upsert({ where: { id: 'global' }, update: { roverApiKey: interaction.fields.getTextInputValue('k'), roverEnabled: e }, create: { id: 'global', roverApiKey: interaction.fields.getTextInputValue('k'), roverEnabled: e }});
+                return interaction.reply({ content: '✅ RoVer settings saved.', ephemeral: true });
+            }
         }
     } catch (error) {
         logger.error('Global Interaction Handler', error);
         if (interaction.isRepliable() && !interaction.replied) {
-            await interaction.reply({ content: '❌ A critical system error occurred. This has been logged for the developer.', ephemeral: true }).catch(() => null);
+            await interaction.reply({ content: '❌ A critical system error occurred. This has been logged.', ephemeral: true }).catch(() => null);
         }
     }
 };
