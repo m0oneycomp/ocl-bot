@@ -13,13 +13,13 @@ model Settings {
   killPoints             Int     @default(5)
   hiComRoleId            String? 
   seniorModRoleId        String?
-  matchHosterRoleId      String? // Added
-  communityVerifyRoleId  String? // Added
-  communityVerifyEnabled Boolean @default(false) // Added
+  matchHosterRoleId      String?
+  communityVerifyRoleId  String?
+  communityVerifyEnabled Boolean @default(false)
   roverApiKey            String?
   roverEnabled           Boolean @default(true)
-  bloxlinkApiKey         String? // Added
-  bloxlinkEnabled        Boolean @default(false) // Added
+  bloxlinkApiKey         String?
+  bloxlinkEnabled        Boolean @default(false)
 }
 
 model User {
@@ -28,6 +28,7 @@ model User {
   elo           Int       @default(1200)
   points        Int       @default(0)
   activeLeague  String?   
+  activeTeam    String?   // Tracks "A" or "B" during a match
   clanId        String?
   clanRank      String    @default("MEMBER")
   clan          Clan?     @relation(fields: [clanId], references: [id])
@@ -38,7 +39,10 @@ model League {
   id            String    @id @default(uuid())
   hostId        String
   channelId     String
-  threadId      String?
+  gameType      String    @default("Ranked")
+  matchType     String    @default("5v5")
+  region        String    @default("NA East")
+  vipServer     String?
   status        String    @default("PENDING") 
   capacity      Int       @default(10)
   createdAt     DateTime  @default(now())
@@ -68,7 +72,8 @@ model Match {
   id            String    @id @default(uuid())
   leagueId      String
   league        League    @relation(fields: [leagueId], references: [id])
-  status        String    @default("AWAITING_PROOF") 
+  winningTeam   String
+  createdAt     DateTime  @default(now())
   players       MatchPlayer[]
 }
 

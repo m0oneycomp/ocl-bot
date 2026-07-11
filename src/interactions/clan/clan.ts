@@ -24,6 +24,7 @@ export const clanCommand = {
             .addStringOption(o => o.setName('color').setDescription('Role Hex (e.g. #337def) or Color Word').setRequired(false))
             .addAttachmentOption(o => o.setName('role_icon').setDescription('Custom Role Icon (Needs Boost Lvl 2)').setRequired(false)))
         .addSubcommand(s => s.setName('disband').setDescription('Disband a clan').addStringOption(o => o.setName('clan').setDescription('Exact clan name').setRequired(true).setAutocomplete(true)).addStringOption(o => o.setName('reason').setDescription('Reason').setRequired(true)))
+        .addSubcommand(s => s.setName('leave').setDescription('Resign from your current clan'))
         .addSubcommand(s => s.setName('message').setDescription('Message a clan FO').addStringOption(o => o.setName('clan').setDescription('Target clan').setRequired(true).setAutocomplete(true)).addStringOption(o => o.setName('message').setDescription('Message to send').setRequired(true))),
 
     async execute(interaction: ChatInputCommandInteraction) {
@@ -59,6 +60,15 @@ export const clanCommand = {
                 
                 if (clan.logo) embed.setThumbnail(clan.logo);
                 return interaction.editReply({ content: '', embeds: [embed] });
+            }
+
+if (sub === 'leave') {
+                if (executorUser.clanRank === 'FO') return interaction.editReply('❌ Franchise Owners cannot leave. You must transfer ownership first or disband.');
+                await db.user.update({ where: { id: interaction.user.id }, data: { clanId: null, clanRank: 'MEMBER' } });
+                if (executorUser.clan?.roleId) {
+                    try { const role = interaction.guild?.roles.cache.get(executorUser.clan.roleId); const member = await interaction.guild?.members.fetch(interaction.user.id); if (member && role) await member.roles.remove(role); } catch (e) {}
+                }
+                return interaction.editReply('🚪 You have officially resigned from your clan.');
             }
 
             if (sub === 'request') {
