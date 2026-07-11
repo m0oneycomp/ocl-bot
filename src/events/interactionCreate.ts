@@ -4,6 +4,7 @@ import { db } from '../database/db';
 import { verifyPlayer } from '../services/verification';
 import { logger } from '../utils/logger';
 import { logCommand } from '../utils/commandLogger';
+import { aiMemory } from '../utils/aiMemory';
 import fs from 'fs';
 
 const AUTHORIZED_DEVELOPER_ID = '1197110500333469720';
@@ -89,9 +90,9 @@ export const interactionCreateEvent = async (client: OCLClient, interaction: Int
                 if (selected === 'launch_ai') {
                     if (interaction.user.id !== AUTHORIZED_DEVELOPER_ID) return interaction.reply({ content: '⛔ Unauthorized.', ephemeral: true });
                     
-                    const modal = new ModalBuilder().setCustomId('modal_ai_agent').setTitle('🧠 Gemini Dev Agent');
+                    const modal = new ModalBuilder().setCustomId('modal_ai_agent').setTitle('🧠 Ignite Agent & Send to DMs');
                     modal.addComponents(
-                        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('prompt').setLabel('Instructions / Query').setStyle(TextInputStyle.Paragraph).setRequired(true)),
+                        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('prompt').setLabel('Initial Instructions').setStyle(TextInputStyle.Paragraph).setRequired(true)),
                         new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('link').setLabel('Message Link Context (Optional)').setStyle(TextInputStyle.Short).setRequired(false))
                     );
                     return interaction.showModal(modal);
@@ -106,11 +107,7 @@ export const interactionCreateEvent = async (client: OCLClient, interaction: Int
                 
                 if (s === 'config_points') {
                     const m = new ModalBuilder().setCustomId('modal_points').setTitle('Edit Points');
-                    m.addComponents(
-                        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('w').setLabel('Win').setStyle(TextInputStyle.Short).setValue(set?.winPoints.toString()||'25')),
-                        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('l').setLabel('Loss').setStyle(TextInputStyle.Short).setValue(set?.losePoints.toString()||'0')), 
-                        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('k').setLabel('Kill').setStyle(TextInputStyle.Short).setValue(set?.killPoints.toString()||'5'))
-                    );
+                    m.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('w').setLabel('Win').setStyle(TextInputStyle.Short).setValue(set?.winPoints.toString()||'25')), new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('l').setLabel('Loss').setStyle(TextInputStyle.Short).setValue(set?.losePoints.toString()||'0')), new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('k').setLabel('Kill').setStyle(TextInputStyle.Short).setValue(set?.killPoints.toString()||'5')));
                     return interaction.showModal(m);
                 } 
                 else if (s === 'config_roles') {
@@ -139,24 +136,18 @@ export const interactionCreateEvent = async (client: OCLClient, interaction: Int
                 } 
                 else if (s === 'config_toggles') {
                     const m = new ModalBuilder().setCustomId('modal_toggles').setTitle('Security Toggles (Type "true" or "false")');
-                    m.addComponents(
-                        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('r').setLabel('Require RoVer').setStyle(TextInputStyle.Short).setValue(set?.roverEnabled?'true':'false')),
-                        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('b').setLabel('Require Bloxlink').setStyle(TextInputStyle.Short).setValue(set?.bloxlinkEnabled?'true':'false')),
-                        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('c').setLabel('Require Community Verify Role').setStyle(TextInputStyle.Short).setValue(set?.communityVerifyEnabled?'true':'false'))
-                    );
+                    m.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('r').setLabel('Require RoVer').setStyle(TextInputStyle.Short).setValue(set?.roverEnabled?'true':'false')), new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('b').setLabel('Require Bloxlink').setStyle(TextInputStyle.Short).setValue(set?.bloxlinkEnabled?'true':'false')), new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('c').setLabel('Require Community Verify Role').setStyle(TextInputStyle.Short).setValue(set?.communityVerifyEnabled?'true':'false')));
                     return interaction.showModal(m);
                 }
             }
         }
         else if (interaction.isModalSubmit()) {
             
-            // AI AGENT DIAGNOSTIC UPGRADE
             if (interaction.customId === 'modal_ai_agent') {
                 await interaction.deferReply({ ephemeral: true });
                 
                 const prompt = interaction.fields.getTextInputValue('prompt');
                 const contextLink = interaction.fields.getTextInputValue('link') || null;
-                // Force strip any invisible carriage returns that break the URL
                 const apiKey = process.env.GEMINI_API_KEY?.trim();
 
                 if (!apiKey) return interaction.editReply('❌ System configuration error: `GEMINI_API_KEY` is missing in .env');
@@ -174,22 +165,27 @@ export const interactionCreateEvent = async (client: OCLClient, interaction: Int
                                 groundedContext = `[Context Message from @${targetMessage.author.username} in #${channel.name}]:\n"${targetMessage.content}"\n\n`;
                             }
                         } catch (e) {
-                            return interaction.editReply('⚠️ Unable to retrieve context message. Verify the link and channel permissions.');
+                            return interaction.editReply('⚠️ Unable to retrieve context message.');
                         }
                     }
                 }
 
-                const systemInstruction = "You are a specialized developer assistant built directly inside a Discord management bot. You analyze system issues, inspect message contexts, and provide strategic instructions on how to maintain, patch, or configure the application.";
-                const fullPromptPayload = `${systemInstruction}\n\n${groundedContext}Developer Request: ${prompt}`;
+                // Clear memory for a fresh conversation block
+                aiMemory.length = 0;
+                
+                const systemInstruction = { parts: [{ text: "You are a specialized developer assistant built directly inside a Discord management bot. You analyze system issues, inspect message contexts, and provide strategic instructions on how to maintain, patch, or configure the application." }] };
+                const fullPromptPayload = `${groundedContext}Developer Request: ${prompt}`;
+
+                // Push initial user query into memory
+                aiMemory.push({ role: 'user', parts: [{ text: fullPromptPayload }] });
 
                 try {
                     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ contents: [{ parts: [{ text: fullPromptPayload }] }] })
+                        body: JSON.stringify({ systemInstruction, contents: aiMemory })
                     });
 
-                    // THE DIAGNOSTIC LOGGER: Prints exactly what Google tells us
                     if (!response.ok) {
                         const rawErrorText = await response.text();
                         return interaction.editReply(`🚫 **Gemini API Rejected the Request**\n**Status Code:** \`${response.status}\`\n**Raw Error Output:** \`\`\`json\n${rawErrorText.substring(0, 1000)}\n\`\`\``);
@@ -200,44 +196,47 @@ export const interactionCreateEvent = async (client: OCLClient, interaction: Int
 
                     if (!aiOutput) return interaction.editReply('❌ Received an empty response from the AI cluster.');
 
+                    // Push AI response into memory
+                    aiMemory.push({ role: 'model', parts: [{ text: aiOutput }] });
+
+                    // DM the user the response instead of putting it in the channel
                     if (aiOutput.length > 2000) {
                         const chunks = aiOutput.match(/[\s\S]{1,1900}/g) || [];
-                        await interaction.editReply(chunks[0]);
+                        await interaction.user.send(chunks[0]);
                         for (let i = 1; i < chunks.length; i++) {
-                            await interaction.followUp({ content: chunks[i], ephemeral: true });
+                            await interaction.user.send(chunks[i]);
                         }
                     } else {
-                        await interaction.editReply(aiOutput);
+                        await interaction.user.send(aiOutput);
                     }
+                    
+                    await interaction.editReply('✅ **Agent deployed securely to your Direct Messages.** You can now chat continuously there.');
                 } catch (apiError: any) {
                     await interaction.editReply(`❌ **Network Exception:** \`${apiError.message}\``);
                 }
                 return;
             }
 
+            // ... Settings saves
             if (interaction.customId === 'modal_points') {
                 await db.settings.upsert({ where: { id: 'global' }, update: { winPoints: parseInt(interaction.fields.getTextInputValue('w')), losePoints: parseInt(interaction.fields.getTextInputValue('l')), killPoints: parseInt(interaction.fields.getTextInputValue('k')) }, create: { id: 'global', winPoints: parseInt(interaction.fields.getTextInputValue('w')), losePoints: parseInt(interaction.fields.getTextInputValue('l')), killPoints: parseInt(interaction.fields.getTextInputValue('k')) }});
                 return interaction.reply({ content: '✅ Points saved.', ephemeral: true });
-            } 
-            else if (interaction.customId === 'modal_roles') {
+            } else if (interaction.customId === 'modal_roles') {
                 await db.settings.upsert({ where: { id: 'global' }, update: { hiComRoleId: interaction.fields.getTextInputValue('h') || null, matchHosterRoleId: interaction.fields.getTextInputValue('m') || null, communityVerifyRoleId: interaction.fields.getTextInputValue('c') || null }, create: { id: 'global' }});
                 return interaction.reply({ content: '✅ Roles saved.', ephemeral: true });
-            } 
-            else if (interaction.customId === 'modal_channels') {
+            } else if (interaction.customId === 'modal_channels') {
                 await db.settings.upsert({ where: { id: 'global' }, update: { rankedChannelId: interaction.fields.getTextInputValue('r') || null, leagueChannelId: interaction.fields.getTextInputValue('l') || null, scrimChannelId: interaction.fields.getTextInputValue('s') || null, casualChannelId: interaction.fields.getTextInputValue('c') || null }, create: { id: 'global' }});
                 return interaction.reply({ content: '✅ Match deployment channels securely mapped.', ephemeral: true });
-            }
-            else if (interaction.customId === 'modal_apis') {
+            } else if (interaction.customId === 'modal_apis') {
                 await db.settings.upsert({ where: { id: 'global' }, update: { roverApiKey: interaction.fields.getTextInputValue('r') || null, bloxlinkApiKey: interaction.fields.getTextInputValue('b') || null }, create: { id: 'global' }});
                 return interaction.reply({ content: '✅ APIs saved.', ephemeral: true });
-            } 
-            else if (interaction.customId === 'modal_toggles') {
+            } else if (interaction.customId === 'modal_toggles') {
                 await db.settings.upsert({ where: { id: 'global' }, update: { roverEnabled: interaction.fields.getTextInputValue('r').toLowerCase()==='true', bloxlinkEnabled: interaction.fields.getTextInputValue('b').toLowerCase()==='true', communityVerifyEnabled: interaction.fields.getTextInputValue('c').toLowerCase()==='true' }, create: { id: 'global' }});
                 return interaction.reply({ content: '✅ Security settings updated.', ephemeral: true });
             }
         }
     } catch (error) {
         logger.error('Global Interaction Handler', error);
-        if (interaction.isRepliable() && !interaction.replied) await interaction.reply({ content: '❌ System error logged. Check `/dev` logs for details.', ephemeral: true }).catch(() => null);
+        if (interaction.isRepliable() && !interaction.replied) await interaction.reply({ content: '❌ System error logged.', ephemeral: true }).catch(() => null);
     }
 };

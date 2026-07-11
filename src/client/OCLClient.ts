@@ -1,8 +1,7 @@
-import { Client, GatewayIntentBits, Collection } from 'discord.js';
+import { Client, Collection, GatewayIntentBits, Partials } from 'discord.js';
 
 export class OCLClient extends Client {
-    public commands: Collection<string, any> = new Collection();
-    public components: Collection<string, any> = new Collection();
+    public commands: Collection<string, any>;
 
     constructor() {
         super({
@@ -11,7 +10,14 @@ export class OCLClient extends Client {
                 GatewayIntentBits.GuildMessages,
                 GatewayIntentBits.MessageContent,
                 GatewayIntentBits.GuildMembers,
+                GatewayIntentBits.DirectMessages // 🥷 ALLOWS LISTENING TO DMs
             ],
+            partials: [
+                Partials.Channel, // 🥷 REQUIRED TO READ UNCACHED DM CHANNELS
+                Partials.Message,
+                Partials.User
+            ]
         });
+        this.commands = new Collection();
     }
 }
