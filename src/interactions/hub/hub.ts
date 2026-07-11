@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, SectionBuilder, TextDisplayBuilder, ThumbnailBuilder, SeparatorBuilder } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, SectionBuilder, TextDisplayBuilder, ThumbnailBuilder, SeparatorBuilder, ContainerBuilder, MessageFlags } from 'discord.js';
 import { db } from '../../database/db';
 
 export const hubCommand = {
@@ -22,11 +22,14 @@ export const hubCommand = {
             const kills = user.matches.reduce((sum, m) => sum + m.kills, 0);
             const strikes = await db.strike.count({ where: { userId: user.id } });
 
-            const header = new SectionBuilder()
-                .addTextDisplayComponents(new TextDisplayBuilder().setContent(`# 📊 Profile: ${target.username}`))
-                .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: target.displayAvatarURL() } }));
-
-            const stats = new SectionBuilder()
+            const container = new ContainerBuilder()
+                .setAccentColor(0x337DEF)
+                .addSectionComponents(
+                    new SectionBuilder()
+                        .addTextDisplayComponents(new TextDisplayBuilder().setContent(`# 📊 Profile: ${target.username}`))
+                        .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: target.displayAvatarURL() } }))
+                )
+                .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
                 .addTextDisplayComponents(
                     new TextDisplayBuilder().setContent(`**🏆 Rating:** Elo: ${user.elo} | Points: ${user.points}`),
                     new TextDisplayBuilder().setContent(`**⚔️ Combat:** Wins: ${wins} | Losses: ${losses} | WR: ${winrate}% | Kills: ${kills}`),
@@ -34,7 +37,7 @@ export const hubCommand = {
                     new TextDisplayBuilder().setContent(`**⚠️ Standing:** ${strikes > 0 ? `${strikes} Active Strikes` : 'Clean Record'}`)
                 );
 
-            return interaction.reply({ components: [header, new SeparatorBuilder().setDivider(true), stats] as any[], ephemeral: true });
+            return interaction.reply({ components: [container] as any[], flags: [MessageFlags.IsComponentsV2, MessageFlags.Ephemeral] });
         }
 
         if (sub === 'leaderboard') {
@@ -46,14 +49,18 @@ export const hubCommand = {
                 return `**${index + 1}.** <@${p.id}> ${clanTag} — **${p.elo}** Elo`;
             }).join('\n');
 
-            const board = new SectionBuilder()
-                .addTextDisplayComponents(
-                    new TextDisplayBuilder().setContent('# 🏆 OCL Global Leaderboard'),
-                    new TextDisplayBuilder().setContent(boardText)
-                )
-                .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'https://i.imgur.com/f5LGesj.png' } }));
+            const container = new ContainerBuilder()
+                .setAccentColor(0x337DEF)
+                .addSectionComponents(
+                    new SectionBuilder()
+                        .addTextDisplayComponents(
+                            new TextDisplayBuilder().setContent('# 🏆 OCL Global Leaderboard'),
+                            new TextDisplayBuilder().setContent(boardText)
+                        )
+                        .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'https://i.imgur.com/f5LGesj.png' } }))
+                );
 
-            return interaction.reply({ components: [board] as any[] });
+            return interaction.reply({ components: [container] as any[], flags: MessageFlags.IsComponentsV2 });
         }
     }
 };

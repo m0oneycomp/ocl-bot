@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, ActionRowBuilder, ButtonBuilder, ButtonStyle, SectionBuilder, TextDisplayBuilder, MediaGalleryBuilder, MediaGalleryItemBuilder, ThumbnailBuilder } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, ActionRowBuilder, ButtonBuilder, ButtonStyle, SectionBuilder, TextDisplayBuilder, MediaGalleryBuilder, MediaGalleryItemBuilder, ThumbnailBuilder, ContainerBuilder, MessageFlags } from 'discord.js';
 import { db } from '../../database/db';
 
 export const matchCommand = {
@@ -20,21 +20,27 @@ export const matchCommand = {
             const league = await db.league.create({ data: { hostId: interaction.user.id, channelId: interaction.channelId } });
             await interaction.reply({ content: '✅ Match queue successfully deployed.', ephemeral: true });
 
-            const header = new SectionBuilder()
-                .addTextDisplayComponents(
-                    new TextDisplayBuilder().setContent(`# 🏆 OCL ${mode.charAt(0).toUpperCase() + mode.slice(1)} Queue`),
-                    new TextDisplayBuilder().setContent(`**Host:** <@${interaction.user.id}>\n**Players Joined: 0/10**\n*Click below to enter the queue.*`),
-                    new TextDisplayBuilder().setContent(`*Match ID: ${league.id}*`)
+            const container = new ContainerBuilder()
+                .setAccentColor(0x337DEF)
+                .addSectionComponents(
+                    new SectionBuilder()
+                        .addTextDisplayComponents(
+                            new TextDisplayBuilder().setContent(`# 🏆 OCL ${mode.charAt(0).toUpperCase() + mode.slice(1)} Queue`),
+                            new TextDisplayBuilder().setContent(`**Host:** <@${interaction.user.id}>\n**Players Joined: 0/10**\n*Click below to enter the queue.*\n*Match ID: ${league.id}*`)
+                        )
+                        .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'https://i.imgur.com/f5LGesj.png' } }))
+                )
+                .addMediaGalleryComponents(
+                    new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL('https://i.imgur.com/KvxOH6m.png'))
+                )
+                .addActionRowComponents(
+                    new ActionRowBuilder<ButtonBuilder>().addComponents(
+                        new ButtonBuilder().setCustomId(`join_match_${league.id}`).setLabel('Join Match').setStyle(ButtonStyle.Success),
+                        new ButtonBuilder().setCustomId(`leave_match_${league.id}`).setLabel('Leave').setStyle(ButtonStyle.Danger)
+                    )
                 );
 
-            const banner = new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL('https://i.imgur.com/KvxOH6m.png'));
-
-            const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-                new ButtonBuilder().setCustomId(`join_match_${league.id}`).setLabel('Join Match').setStyle(ButtonStyle.Success),
-                new ButtonBuilder().setCustomId(`leave_match_${league.id}`).setLabel('Leave').setStyle(ButtonStyle.Danger)
-            );
-
-            await interaction.channel?.send({ components: [header, banner, row] as any[] });
+            await interaction.channel?.send({ components: [container] as any[], flags: MessageFlags.IsComponentsV2 });
         }
 
         if (sub === 'teams') {
@@ -47,15 +53,19 @@ export const matchCommand = {
             const mid = Math.ceil(shuffled.length / 2);
             await interaction.reply({ content: '✅ Teams generated.', ephemeral: true });
 
-            const teamsSection = new SectionBuilder()
-                .addTextDisplayComponents(
-                    new TextDisplayBuilder().setContent('# 🎲 Match Teams Generated'),
-                    new TextDisplayBuilder().setContent(`**🔵 Team A**\n${shuffled.slice(0, mid).map(p => `<@${p.id}>`).join('\n') || 'Empty'}\n\n**🔴 Team B**\n${shuffled.slice(mid).map(p => `<@${p.id}>`).join('\n') || 'Empty'}`)
-                )
-                .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'https://i.imgur.com/f5LGesj.png' } }));
+            const container = new ContainerBuilder()
+                .setAccentColor(0x337DEF)
+                .addSectionComponents(
+                    new SectionBuilder()
+                        .addTextDisplayComponents(
+                            new TextDisplayBuilder().setContent('# 🎲 Match Teams Generated'),
+                            new TextDisplayBuilder().setContent(`**🔵 Team A**\n${shuffled.slice(0, mid).map(p => `<@${p.id}>`).join('\n') || 'Empty'}\n\n**🔴 Team B**\n${shuffled.slice(mid).map(p => `<@${p.id}>`).join('\n') || 'Empty'}`)
+                        )
+                        .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'https://i.imgur.com/f5LGesj.png' } }))
+                );
 
             await db.league.update({ where: { id: league.id }, data: { status: 'ACTIVE' } });
-            await interaction.channel?.send({ content: `🚨 <@${league.hostId}>, your teams are ready!`, components: [teamsSection] as any[] });
+            await interaction.channel?.send({ content: `🚨 <@${league.hostId}>, your teams are ready!`, components: [container] as any[], flags: MessageFlags.IsComponentsV2 });
         }
         
         if (sub === 'end') {

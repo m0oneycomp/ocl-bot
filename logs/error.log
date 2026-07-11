@@ -6,3 +6,28 @@ DiscordjsTypeError [ColorConvert]: Unable to convert "#Blue" to a number.
     at async Object.execute (/home/mooneycomp/discord/bots/ocl/ocl-utilities/src/interactions/clan/clan.ts:181:32)
     at async interactionCreateEvent (/home/mooneycomp/discord/bots/ocl/ocl-utilities/src/events/interactionCreate.ts:19:13)
 
+[2026-07-11T09:59:08.863Z] [Global Interaction Handler] ERROR:
+Error: Received one or more errors
+    at _UnionValidator.handle (/home/mooneycomp/discord/bots/ocl/ocl-utilities/node_modules/@sapphire/shapeshift/src/validators/UnionValidator.ts:9:57)
+    at _UnionValidator.parse (/home/mooneycomp/discord/bots/ocl/ocl-utilities/node_modules/@sapphire/shapeshift/src/validators/BaseValidator.ts:126:2)
+    at SectionBuilder.toJSON (/home/mooneycomp/discord/bots/ocl/ocl-utilities/node_modules/@discordjs/builders/src/components/v2/Section.ts:150:34)
+    at /home/mooneycomp/discord/bots/ocl/ocl-utilities/node_modules/discord.js/src/structures/MessagePayload.js:151:46
+    at Array.map (<anonymous>)
+    at MessagePayload.resolveBody (/home/mooneycomp/discord/bots/ocl/ocl-utilities/node_modules/discord.js/src/structures/MessagePayload.js:150:49)
+    at TextChannel.send (/home/mooneycomp/discord/bots/ocl/ocl-utilities/node_modules/discord.js/src/structures/interfaces/TextBasedChannel.js:191:61)
+    at Object.execute (/home/mooneycomp/discord/bots/ocl/ocl-utilities/src/interactions/match/match.ts:37:40)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async interactionCreateEvent (/home/mooneycomp/discord/bots/ocl/ocl-utilities/src/events/interactionCreate.ts:21:13)
+
+[2026-07-11T09:59:15.774Z] [Global Interaction Handler] ERROR:
+Error: Received one or more errors
+    at _UnionValidator.handle (/home/mooneycomp/discord/bots/ocl/ocl-utilities/node_modules/@sapphire/shapeshift/src/validators/UnionValidator.ts:9:57)
+    at _UnionValidator.parse (/home/mooneycomp/discord/bots/ocl/ocl-utilities/node_modules/@sapphire/shapeshift/src/validators/BaseValidator.ts:126:2)
+    at SectionBuilder.toJSON (/home/mooneycomp/discord/bots/ocl/ocl-utilities/node_modules/@discordjs/builders/src/components/v2/Section.ts:150:34)
+    at /home/mooneycomp/discord/bots/ocl/ocl-utilities/node_modules/discord.js/src/structures/MessagePayload.js:151:46
+    at Array.map (<anonymous>)
+    at MessagePayload.resolveBody (/home/mooneycomp/discord/bots/ocl/ocl-utilities/node_modules/discord.js/src/structures/MessagePayload.js:150:49)
+    at ChatInputCommandInteraction.reply (/home/mooneycomp/discord/bots/ocl/ocl-utilities/node_modules/discord.js/src/structures/interfaces/InteractionResponses.js:191:56)
+    at Object.execute (/home/mooneycomp/discord/bots/ocl/ocl-utilities/src/interactions/settings/settings.ts:43:27)
+    at async interactionCreateEvent (/home/mooneycomp/discord/bots/ocl/ocl-utilities/src/events/interactionCreate.ts:21:13)
+
