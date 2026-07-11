@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, SectionBuilder, TextDisplayBuilder, ThumbnailBuilder, SeparatorBuilder, ContainerBuilder, MessageFlags } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
 import { db } from '../../database/db';
 
 export const hubCommand = {
@@ -6,10 +6,23 @@ export const hubCommand = {
         .setName('hub')
         .setDescription('Player Profiles and Global Leaderboards')
         .addSubcommand(s => s.setName('profile').setDescription('View your OCL statistics').addUserOption(o => o.setName('user').setDescription('Target player')))
-        .addSubcommand(s => s.setName('leaderboard').setDescription('View top OCL players')),
+        .addSubcommand(s => s.setName('leaderboard').setDescription('View top OCL players'))
+        .addSubcommand(s => s.setName('editstats').setDescription('Admin only: Edit player stats')
+            .addUserOption(o => o.setName('user').setDescription('Target player').setRequired(true))
+            .addIntegerOption(o => o.setName('elo').setDescription('New exact Elo').setRequired(true))
+            .addIntegerOption(o => o.setName('points').setDescription('New exact Points').setRequired(true))),
 
     async execute(interaction: ChatInputCommandInteraction) {
         const sub = interaction.options.getSubcommand();
+
+        if (sub === 'editstats') {
+            if (!interaction.memberPermissions?.has('Administrator')) return interaction.reply({ content: '⛔ Admin only.', ephemeral: true });
+            const target = interaction.options.getUser('user', true);
+            const elo = interaction.options.getInteger('elo', true);
+            const points = interaction.options.getInteger('points', true);
+            await db.user.upsert({ where: { id: target.id }, update: { elo, points }, create: { id: target.id, elo, points }});
+            return interaction.reply({ content: `✅ <@${target.id}> stats updated. Elo: **${elo}**, Points: **${points}**`, ephemeral: true });
+        }
 
         if (sub === 'profile') {
             const target = interaction.options.getUser('user') || interaction.user;
@@ -22,22 +35,18 @@ export const hubCommand = {
             const kills = user.matches.reduce((sum, m) => sum + m.kills, 0);
             const strikes = await db.strike.count({ where: { userId: user.id } });
 
-            const container = new ContainerBuilder()
-                .setAccentColor(0x337DEF)
-                .addSectionComponents(
-                    new SectionBuilder()
-                        .addTextDisplayComponents(new TextDisplayBuilder().setContent(`# 📊 Profile: ${target.username}`))
-                        .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: target.displayAvatarURL() } }))
-                )
-                .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
-                .addTextDisplayComponents(
-                    new TextDisplayBuilder().setContent(`**🏆 Rating:** Elo: ${user.elo} | Points: ${user.points}`),
-                    new TextDisplayBuilder().setContent(`**⚔️ Combat:** Wins: ${wins} | Losses: ${losses} | WR: ${winrate}% | Kills: ${kills}`),
-                    new TextDisplayBuilder().setContent(`**🛡️ Faction:** ${user.clan ? `${user.clan.name} (${user.clanRank})` : '*No Clan*'}`),
-                    new TextDisplayBuilder().setContent(`**⚠️ Standing:** ${strikes > 0 ? `${strikes} Active Strikes` : 'Clean Record'}`)
+            const embed = new EmbedBuilder()
+                .setTitle(`📊 OCL Profile: ${target.username}`)
+                .setThumbnail(target.displayAvatarURL())
+                .setColor('#337def')
+                .addFields(
+                    { name: '🏆 Rating', value: `Elo: **${user.elo}**\nPoints: **${user.points}**`, inline: true },
+                    { name: '⚔️ Combat', value: `Wins: **${wins}**\nLosses: **${losses}**\nWin Rate: **${winrate}%**\nTotal Kills: **${kills}**`, inline: true },
+                    { name: '🛡️ Faction', value: user.clan ? `**${user.clan.name}** (${user.clanRank})` : '*No Clan*', inline: true },
+                    { name: '⚠️ Standing', value: strikes > 0 ? `${strikes} Active Strikes` : 'Clean Record', inline: true }
                 );
 
-            return interaction.reply({ components: [container] as any[], flags: [MessageFlags.IsComponentsV2, MessageFlags.Ephemeral] });
+            return interaction.reply({ embeds: [embed], ephemeral: true });
         }
 
         if (sub === 'leaderboard') {
@@ -47,20 +56,16 @@ export const hubCommand = {
             const boardText = topPlayers.map((p, index) => {
                 const clanTag = p.clan ? `[${p.clan.name}]` : '';
                 return `**${index + 1}.** <@${p.id}> ${clanTag} — **${p.elo}** Elo`;
-            }).join('\n');
+            }).join('\n\n');
 
-            const container = new ContainerBuilder()
-                .setAccentColor(0x337DEF)
-                .addSectionComponents(
-                    new SectionBuilder()
-                        .addTextDisplayComponents(
-                            new TextDisplayBuilder().setContent('# 🏆 OCL Global Leaderboard'),
-                            new TextDisplayBuilder().setContent(boardText)
-                        )
-                        .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'https://i.imgur.com/f5LGesj.png' } }))
-                );
+            const embed = new EmbedBuilder()
+                .setTitle('🏆 OCL Global Leaderboard')
+                .setDescription(boardText)
+                .setColor('#337def')
+                .setThumbnail('https://i.imgur.com/f5LGesj.png')
+                .setTimestamp();
 
-            return interaction.reply({ components: [container] as any[], flags: MessageFlags.IsComponentsV2 });
+            return interaction.reply({ embeds: [embed], ephemeral: true });
         }
     }
 };

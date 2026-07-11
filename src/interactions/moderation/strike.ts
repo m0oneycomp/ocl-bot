@@ -4,56 +4,45 @@ import { db } from '../../database/db';
 export const strikeCommand = {
     data: new SlashCommandBuilder()
         .setName('strike')
-        .setDescription('Universal strike management (Users & Clans)')
-        .addSubcommand(s => s.setName('issue').setDescription('Issue a strike')
-            .addStringOption(o => o.setName('reason').setDescription('Reason for strike').setRequired(true))
-            .addUserOption(o => o.setName('user').setDescription('Target user (leave blank if clan)'))
-            .addStringOption(o => o.setName('clan').setDescription('Target clan name (leave blank if user)')))
-        .addSubcommand(s => s.setName('view').setDescription('View strike history')
-            .addUserOption(o => o.setName('user').setDescription('Target user'))
-            .addStringOption(o => o.setName('clan').setDescription('Target clan name'))),
+        .setDescription('Moderation system for competitive infractions')
+        .addSubcommand(s => s.setName('add').setDescription('Strike a user or clan')
+            .addStringOption(o => o.setName('reason').setDescription('Infraction reason').setRequired(true))
+            .addUserOption(o => o.setName('user').setDescription('Specific user to strike').setRequired(false))
+            .addStringOption(o => o.setName('clan').setDescription('Specific clan to strike').setRequired(false).setAutocomplete(true)))
+        .addSubcommand(s => s.setName('remove').setDescription('Remove a strike (Undo)')
+            .addStringOption(o => o.setName('strike_id').setDescription('Exact ID of the strike to remove').setRequired(true))),
 
     async execute(interaction: ChatInputCommandInteraction) {
-        if (!interaction.memberPermissions?.has('ManageMessages')) return interaction.reply({ content: '⛔ Unauthorized.', ephemeral: true });
+        if (!interaction.memberPermissions?.has('Administrator')) return interaction.reply({ content: '⛔ Unauthorized.', ephemeral: true });
 
         const sub = interaction.options.getSubcommand();
-        const userTarget = interaction.options.getUser('user');
-        const clanTarget = interaction.options.getString('clan');
-        const reason = interaction.options.getString('reason') || 'No reason provided';
+        
+        if (sub === 'add') {
+            const reason = interaction.options.getString('reason', true);
+            const user = interaction.options.getUser('user');
+            const clan = interaction.options.getString('clan');
 
-        if (!userTarget && !clanTarget) return interaction.reply({ content: '❌ Specify either a User OR a Clan.', ephemeral: true });
+            if (!user && !clan) return interaction.reply({ content: '❌ You must specify either a user or a clan to strike.', ephemeral: true });
 
-        if (sub === 'issue') {
-            if (clanTarget) {
-                const clan = await db.clan.findUnique({ where: { name: clanTarget } });
-                if (!clan) return interaction.reply({ content: `❌ Clan **${clanTarget}** does not exist.`, ephemeral: true });
-                
-                await db.strike.create({ data: { reason, clanName: clan.name } });
-                const embed = new EmbedBuilder().setTitle('⚠️ Clan Strike Issued').setDescription(`**Clan:** ${clan.name}\n**Reason:** ${reason}`).setColor('#e74c3c');
-                return interaction.reply({ embeds: [embed] });
-            }
+            const strike = await db.strike.create({ data: { reason, userId: user?.id, clanName: clan } });
 
-            if (userTarget) {
-                await db.strike.create({ data: { reason, userId: userTarget.id } });
-                const embed = new EmbedBuilder().setTitle('⚠️ User Strike Issued').setDescription(`**User:** <@${userTarget.id}>\n**Reason:** ${reason}`).setColor('#e74c3c');
-                return interaction.reply({ embeds: [embed] });
-            }
+            const embed = new EmbedBuilder()
+                .setTitle('⚠️ Official Moderation Strike Issued')
+                .setDescription(`**Reason:** ${reason}\n**Target:** ${user ? `<@${user.id}>` : `Clan ${clan}`}\n**Strike ID:** \`${strike.id}\``)
+                .setColor('#e74c3c')
+                .setTimestamp();
+
+            await interaction.reply({ content: '✅ Strike recorded.', ephemeral: true });
+            await interaction.channel?.send({ embeds: [embed] });
         }
 
-        if (sub === 'view') {
-            const strikes = await db.strike.findMany({
-                where: clanTarget ? { clanName: clanTarget } : { userId: userTarget?.id }
-            });
+        if (sub === 'remove') {
+            const strikeId = interaction.options.getString('strike_id', true);
+            const strike = await db.strike.findUnique({ where: { id: strikeId } });
+            if (!strike) return interaction.reply({ content: '❌ Strike ID not found in database.', ephemeral: true });
 
-            const targetName = clanTarget ? clanTarget : `<@${userTarget?.id}>`;
-            const embed = new EmbedBuilder()
-                .setTitle(`📋 Strike Record: ${clanTarget || userTarget?.username}`)
-                .setColor(strikes.length > 0 ? '#e74c3c' : '#2b2d31')
-                .setDescription(strikes.length > 0 
-                    ? strikes.map((s, i) => `**${i + 1}.** ${s.reason} *(Date: ${s.createdAt.toLocaleDateString()})*`).join('\n') 
-                    : `No active strikes found for ${targetName}.`);
-
-            return interaction.reply({ embeds: [embed] });
+            await db.strike.delete({ where: { id: strikeId } });
+            return interaction.reply({ content: `✅ Strike \`${strikeId}\` has been completely revoked and removed from records.`, ephemeral: true });
         }
     }
 };

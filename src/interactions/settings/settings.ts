@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, SectionBuilder, TextDisplayBuilder, SeparatorBuilder, MediaGalleryBuilder, MediaGalleryItemBuilder, ContainerBuilder, ThumbnailBuilder, MessageFlags } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } from 'discord.js';
 import { db } from '../../database/db';
 
 export const settingsCommand = {
@@ -11,36 +11,25 @@ export const settingsCommand = {
 
         const settings = await db.settings.findUnique({ where: { id: 'global' } });
         
-        const container = new ContainerBuilder()
-            .setAccentColor(0x337DEF)
-            .addSectionComponents(
-                new SectionBuilder()
-                    .addTextDisplayComponents(
-                        new TextDisplayBuilder().setContent('# ⚙️ OCL Configuration Portal'),
-                        new TextDisplayBuilder().setContent('Select an administrative subsystem category below to modify settings dynamically.')
-                    )
-                    .setThumbnailAccessory(new ThumbnailBuilder({ media: { url: 'https://i.imgur.com/f5LGesj.png' } }))
-            )
-            .addMediaGalleryComponents(
-                new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL('https://i.imgur.com/KvxOH6m.png'))
-            )
-            .addSeparatorComponents(new SeparatorBuilder().setDivider(true))
-            .addTextDisplayComponents(
-                new TextDisplayBuilder().setContent('**📊 Points Mode**'),
-                new TextDisplayBuilder().setContent(`Win: \`+${settings?.winPoints ?? 25}\` | Loss: \`${(settings?.losePoints ?? 0) > 0 ? '+' : ''}${settings?.losePoints ?? 0}\` | Kill: \`+${settings?.killPoints ?? 5}\``),
-                new TextDisplayBuilder().setContent('\n**🔒 RoVer Integration**'),
-                new TextDisplayBuilder().setContent(`Verification: \`${settings?.roverEnabled ? 'ENABLED' : 'DISABLED'}\``)
-            )
-            .addActionRowComponents(
-                new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
-                    new StringSelectMenuBuilder().setCustomId('settings_selector').setPlaceholder('Select a configuration profile to modify').addOptions(
-                        new StringSelectMenuOptionBuilder().setLabel('Points Allocation System').setValue('config_points').setEmoji('📊'),
-                        new StringSelectMenuOptionBuilder().setLabel('Role & Permission Hierarchy').setValue('config_roles').setEmoji('🛡️'),
-                        new StringSelectMenuOptionBuilder().setLabel('RoVer API Settings').setValue('config_rover').setEmoji('🔗')
-                    )
-                )
+        const embed = new EmbedBuilder()
+            .setTitle('⚙️ OCL Configuration Portal')
+            .setDescription('Select an administrative subsystem category below to modify settings dynamically.')
+            .setColor('#337def') 
+            .setImage('https://i.imgur.com/KvxOH6m.png')
+            .addFields(
+                { name: '📊 Current Points Mode', value: `Win: \`+${settings?.winPoints ?? 25}\` | Loss: \`${(settings?.losePoints ?? 0) > 0 ? '+' : ''}${settings?.losePoints ?? 0}\` | Kill: \`+${settings?.killPoints ?? 5}\``, inline: false },
+                { name: '🔒 Security Toggles', value: `RoVer: \`${settings?.roverEnabled ? 'ON' : 'OFF'}\` | Bloxlink: \`${settings?.bloxlinkEnabled ? 'ON' : 'OFF'}\` | Community Verify: \`${settings?.communityVerifyEnabled ? 'ON' : 'OFF'}\``, inline: false }
             );
 
-        await interaction.reply({ components: [container] as any[], flags: [MessageFlags.IsComponentsV2, MessageFlags.Ephemeral] });
+        const select = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+            new StringSelectMenuBuilder().setCustomId('settings_selector').setPlaceholder('Select a configuration profile to modify').addOptions(
+                new StringSelectMenuOptionBuilder().setLabel('Points Allocation System').setValue('config_points').setEmoji('📊'),
+                new StringSelectMenuOptionBuilder().setLabel('Role & Hierarchy Manager').setValue('config_roles').setEmoji('🛡️'),
+                new StringSelectMenuOptionBuilder().setLabel('Third-Party API Keys').setValue('config_apis').setEmoji('🔑'),
+                new StringSelectMenuOptionBuilder().setLabel('Security Feature Toggles').setValue('config_toggles').setEmoji('⚙️')
+            )
+        );
+
+        await interaction.reply({ embeds: [embed], components: [select], ephemeral: true });
     }
 };

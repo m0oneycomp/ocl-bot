@@ -1,4 +1,4 @@
-import { ChatInputCommandInteraction, EmbedBuilder, TextChannel } from 'discord.js';
+import { ChatInputCommandInteraction, EmbedBuilder, TextChannel, CommandInteractionOption } from 'discord.js';
 
 export const logCommand = async (interaction: ChatInputCommandInteraction) => {
     const logChannelId = process.env.LOG_CHANNEL_ID;
@@ -8,25 +8,32 @@ export const logCommand = async (interaction: ChatInputCommandInteraction) => {
         const channel = await interaction.client.channels.fetch(logChannelId).catch(() => null) as TextChannel;
         if (!channel) return;
 
-        // Formats options (like clan name, target user, etc) so you know exactly what they typed
-        const options = interaction.options.data.map(opt => {
-            if (opt.options) return `**${opt.name}**: Subcommand Executed`;
-            return `**${opt.name}**: ${opt.value}`;
-        }).join('\n') || 'None';
+        // Recursively extract all data, including attachment URLs
+        const extractOptions = (options: readonly CommandInteractionOption[]): string => {
+            let result = '';
+            for (const opt of options) {
+                if (opt.options) result += `**[Subcommand] ${opt.name}**\n${extractOptions(opt.options)}`;
+                else if (opt.type === 11) result += `• **${opt.name}**: [File/Image Attached](${opt.attachment?.url})\n`;
+                else if (opt.user) result += `• **${opt.name}**: <@${opt.user.id}>\n`;
+                else if (opt.role) result += `• **${opt.name}**: <@&${opt.role.id}>\n`;
+                else result += `• **${opt.name}**: ${opt.value}\n`;
+            }
+            return result;
+        };
+
+        const inputs = extractOptions(interaction.options.data) || '*No additional parameters*';
 
         const embed = new EmbedBuilder()
-            .setTitle('⌨️ Command Executed')
+            .setTitle('⌨️ Administrative Command Audit')
             .addFields(
-                { name: 'User', value: `<@${interaction.user.id}>`, inline: true },
-                { name: 'Command', value: `\`/${interaction.commandName} ${interaction.options.getSubcommand(false) || ''}\``, inline: true },
-                { name: 'Channel', value: `<#${interaction.channelId}>`, inline: true },
-                { name: 'Inputs', value: options }
+                { name: 'Executor', value: `<@${interaction.user.id}>`, inline: true },
+                { name: 'Command Matrix', value: `\`/${interaction.commandName} ${interaction.options.getSubcommand(false) || ''}\``, inline: true },
+                { name: 'Origin Channel', value: `<#${interaction.channelId}>`, inline: true },
+                { name: 'Payload Data', value: inputs }
             )
             .setColor('#337def')
             .setTimestamp();
 
         await channel.send({ embeds: [embed] });
-    } catch (error) {
-        // Fail silently so it doesn't interrupt the actual command if the log channel gets deleted
-    }
+    } catch (error) {}
 };

@@ -7,14 +7,19 @@ datasource db {
 }
 
 model Settings {
-  id              String  @id @default("global")
-  winPoints       Int     @default(25)
-  losePoints      Int     @default(0)
-  killPoints      Int     @default(5)
-  hiComRoleId     String? // Added for HiCom Bypass
-  seniorModRoleId String?
-  roverApiKey     String?
-  roverEnabled    Boolean @default(true)
+  id                     String  @id @default("global")
+  winPoints              Int     @default(25)
+  losePoints             Int     @default(0)
+  killPoints             Int     @default(5)
+  hiComRoleId            String? 
+  seniorModRoleId        String?
+  matchHosterRoleId      String? // Added
+  communityVerifyRoleId  String? // Added
+  communityVerifyEnabled Boolean @default(false) // Added
+  roverApiKey            String?
+  roverEnabled           Boolean @default(true)
+  bloxlinkApiKey         String? // Added
+  bloxlinkEnabled        Boolean @default(false) // Added
 }
 
 model User {
