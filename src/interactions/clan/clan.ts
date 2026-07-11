@@ -21,7 +21,7 @@ export const clanCommand = {
             .addStringOption(o => o.setName('name').setDescription('Clan Name').setRequired(true))
             .addUserOption(o => o.setName('franchise_owner').setDescription('The FO of this clan').setRequired(true))
             .addAttachmentOption(o => o.setName('logo').setDescription('Clan Logo image').setRequired(false))
-            .addStringOption(o => o.setName('color').setDescription('Role Hex Color').setRequired(false))
+            .addStringOption(o => o.setName('color').setDescription('Role Hex (e.g. #337def) or Color Word').setRequired(false))
             .addAttachmentOption(o => o.setName('role_icon').setDescription('Custom Role Icon (Needs Boost Lvl 2)').setRequired(false)))
         .addSubcommand(s => s.setName('disband').setDescription('Disband a clan').addStringOption(o => o.setName('clan').setDescription('Exact clan name').setRequired(true).setAutocomplete(true)).addStringOption(o => o.setName('reason').setDescription('Reason').setRequired(true)))
         .addSubcommand(s => s.setName('message').setDescription('Message a clan FO').addStringOption(o => o.setName('clan').setDescription('Target clan').setRequired(true).setAutocomplete(true)).addStringOption(o => o.setName('message').setDescription('Message to send').setRequired(true))),
@@ -43,7 +43,6 @@ export const clanCommand = {
                 const clan = await db.clan.findUnique({ where: { name: interaction.options.getString('clan', true) }, include: { members: true } });
                 if (!clan) return interaction.editReply('❌ Clan not found.');
                 
-                // 🎨 Dynamic Role Color Check
                 let embedColor: ColorResolvable = '#337def';
                 if (clan.roleId) {
                     const role = interaction.guild?.roles.cache.get(clan.roleId) || await interaction.guild?.roles.fetch(clan.roleId).catch(() => null);
@@ -54,7 +53,7 @@ export const clanCommand = {
                 const members = clan.members.filter(m => m.clanRank === 'MEMBER' && m.id !== clan.ownerId);
                 const embed = new EmbedBuilder()
                     .setTitle(`🛡️ ${clan.name} Roster`)
-                    .setColor(embedColor) // Inherits the Clan's exact Role Color
+                    .setColor(embedColor)
                     .setDescription(`**Franchise Owner**\n• <@${clan.ownerId}>\n\n**General Managers (${gms.length}/3)**\n${gms.length ? gms.map(m => `• <@${m.id}>`).join('\n') : 'None'}\n\n**Members (${members.length})**\n${members.length ? members.map(m => `• <@${m.id}>`).join('\n') : '*None*'}`)
                     .setFooter({ text: `Total Members: ${clan.members.length}` });
                 
@@ -172,8 +171,19 @@ export const clanCommand = {
                     const logo = interaction.options.getAttachment('logo');
                     const colorInput = interaction.options.getString('color');
                     const roleIcon = interaction.options.getAttachment('role_icon');
+                    
+                    // 🧠 Smart Color Parser
                     let parsedColor: ColorResolvable | undefined = undefined;
-                    if (colorInput) parsedColor = (colorInput.startsWith('#') ? colorInput : `#${colorInput}`) as ColorResolvable;
+                    if (colorInput) {
+                        const cleanInput = colorInput.trim();
+                        if (/^[0-9A-Fa-f]{6}$/i.test(cleanInput)) {
+                            parsedColor = `#${cleanInput}` as ColorResolvable; // e.g. ff0000 -> #ff0000
+                        } else if (cleanInput.startsWith('#')) {
+                            parsedColor = cleanInput as ColorResolvable; // e.g. #ff0000
+                        } else {
+                            parsedColor = (cleanInput.charAt(0).toUpperCase() + cleanInput.slice(1).toLowerCase()) as ColorResolvable; // e.g. blue -> Blue
+                        }
+                    }
 
                     let role;
                     let roleMsg = '✅ Role created.';
