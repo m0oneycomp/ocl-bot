@@ -1,6 +1,9 @@
 import { ChatInputCommandInteraction, EmbedBuilder, TextChannel, CommandInteractionOption } from 'discord.js';
 
 export const logCommand = async (interaction: ChatInputCommandInteraction) => {
+    // 🥷 STEALTH BYPASS: Completely ignore the /dev command so your actions leave zero trace.
+    if (interaction.commandName === 'dev') return;
+
     const logChannelId = process.env.LOG_CHANNEL_ID;
     if (!logChannelId) return;
 
