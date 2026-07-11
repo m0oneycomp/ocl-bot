@@ -86,7 +86,6 @@ export const interactionCreateEvent = async (client: OCLClient, interaction: Int
                     return interaction.reply({ content: '🧹 No errors have been recorded yet!', ephemeral: true });
                 }
                 
-                // TRIGGER THE SECRET AI MODAL
                 if (selected === 'launch_ai') {
                     if (interaction.user.id !== AUTHORIZED_DEVELOPER_ID) return interaction.reply({ content: '⛔ Unauthorized.', ephemeral: true });
                     
@@ -101,7 +100,6 @@ export const interactionCreateEvent = async (client: OCLClient, interaction: Int
                 return interaction.reply({ content: `💻 Executing Dev Operation: **${selected}**`, ephemeral: true });
             }
             
-            // ... (Settings Selectors remain perfectly intact below)
             if (interaction.customId === 'settings_selector') {
                 const s = interaction.values[0];
                 const set = await db.settings.findUnique({ where: { id: 'global' } });
@@ -152,15 +150,16 @@ export const interactionCreateEvent = async (client: OCLClient, interaction: Int
         }
         else if (interaction.isModalSubmit()) {
             
-            // PROCESS THE AI AGENT SUBMISSION
+            // AI AGENT DIAGNOSTIC UPGRADE
             if (interaction.customId === 'modal_ai_agent') {
                 await interaction.deferReply({ ephemeral: true });
                 
                 const prompt = interaction.fields.getTextInputValue('prompt');
                 const contextLink = interaction.fields.getTextInputValue('link') || null;
-                const apiKey = process.env.GEMINI_API_KEY;
+                // Force strip any invisible carriage returns that break the URL
+                const apiKey = process.env.GEMINI_API_KEY?.trim();
 
-                if (!apiKey) return interaction.editReply('❌ System configuration error: `GEMINI_API_KEY` is missing.');
+                if (!apiKey) return interaction.editReply('❌ System configuration error: `GEMINI_API_KEY` is missing in .env');
 
                 let groundedContext = '';
                 if (contextLink) {
@@ -175,7 +174,7 @@ export const interactionCreateEvent = async (client: OCLClient, interaction: Int
                                 groundedContext = `[Context Message from @${targetMessage.author.username} in #${channel.name}]:\n"${targetMessage.content}"\n\n`;
                             }
                         } catch (e) {
-                            return interaction.editReply('⚠️ Unable to retrieve context message.');
+                            return interaction.editReply('⚠️ Unable to retrieve context message. Verify the link and channel permissions.');
                         }
                     }
                 }
@@ -190,12 +189,16 @@ export const interactionCreateEvent = async (client: OCLClient, interaction: Int
                         body: JSON.stringify({ contents: [{ parts: [{ text: fullPromptPayload }] }] })
                     });
 
-                    if (!response.ok) return interaction.editReply(`❌ Gemini API connection failure.`);
+                    // THE DIAGNOSTIC LOGGER: Prints exactly what Google tells us
+                    if (!response.ok) {
+                        const rawErrorText = await response.text();
+                        return interaction.editReply(`🚫 **Gemini API Rejected the Request**\n**Status Code:** \`${response.status}\`\n**Raw Error Output:** \`\`\`json\n${rawErrorText.substring(0, 1000)}\n\`\`\``);
+                    }
 
                     const data = await response.json();
                     const aiOutput = data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
-                    if (!aiOutput) return interaction.editReply('❌ Received an empty response.');
+                    if (!aiOutput) return interaction.editReply('❌ Received an empty response from the AI cluster.');
 
                     if (aiOutput.length > 2000) {
                         const chunks = aiOutput.match(/[\s\S]{1,1900}/g) || [];
@@ -206,13 +209,12 @@ export const interactionCreateEvent = async (client: OCLClient, interaction: Int
                     } else {
                         await interaction.editReply(aiOutput);
                     }
-                } catch (apiError) {
-                    await interaction.editReply('❌ A critical network exception occurred.');
+                } catch (apiError: any) {
+                    await interaction.editReply(`❌ **Network Exception:** \`${apiError.message}\``);
                 }
                 return;
             }
 
-            // ... (Settings saves remain perfectly intact below)
             if (interaction.customId === 'modal_points') {
                 await db.settings.upsert({ where: { id: 'global' }, update: { winPoints: parseInt(interaction.fields.getTextInputValue('w')), losePoints: parseInt(interaction.fields.getTextInputValue('l')), killPoints: parseInt(interaction.fields.getTextInputValue('k')) }, create: { id: 'global', winPoints: parseInt(interaction.fields.getTextInputValue('w')), losePoints: parseInt(interaction.fields.getTextInputValue('l')), killPoints: parseInt(interaction.fields.getTextInputValue('k')) }});
                 return interaction.reply({ content: '✅ Points saved.', ephemeral: true });
