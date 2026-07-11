@@ -42,14 +42,12 @@ export const readyEvent = async (client: OCLClient) => {
         let finalPrompt = message.content;
         let groundedContext = '';
 
-        // 🧠 ACTIVE LINK PARSER: If you paste a link in DMs, the bot will now fetch it.
         const messageUrlRegex = /discord\.com\/channels\/(\d+)\/(\d+)\/(\d+)/;
         const match = message.content.match(messageUrlRegex);
 
         if (match) {
             const [, guildId, channelId, messageId] = match;
             try {
-                // Ensure the bot is in the server the link points to
                 const guild = await client.guilds.fetch(guildId).catch(() => null);
                 if (guild) {
                     const channel = await guild.channels.fetch(channelId).catch(() => null);
@@ -57,7 +55,6 @@ export const readyEvent = async (client: OCLClient) => {
                         const targetMessage = await channel.messages.fetch(messageId).catch(() => null);
                         if (targetMessage) {
                             groundedContext = `\n\n[CONTEXT MESSAGE FROM SYSTEM]:\nAuthor: @${targetMessage.author.username}\nChannel: #${channel.name}\nContent: "${targetMessage.content}"\n[END CONTEXT]\n\n`;
-                            // Replace the raw link in the prompt with the actual context so the AI doesn't get confused
                             finalPrompt = finalPrompt.replace(messageUrlRegex, groundedContext);
                         }
                     }
@@ -68,11 +65,22 @@ export const readyEvent = async (client: OCLClient) => {
         }
 
         aiMemory.push({ role: 'user', parts: [{ text: finalPrompt }] });
-
         if (aiMemory.length > 20) aiMemory.splice(0, aiMemory.length - 20);
 
-        // Updated instructions so the AI knows to prioritize the [CONTEXT MESSAGE] block
-        const systemInstruction = { parts: [{ text: "You are a specialized developer assistant built directly inside a Discord management bot. If the user provides a [CONTEXT MESSAGE] block, you MUST read its contents and analyze it. Do not just explain what a Discord link is. Actually read the text provided in the context block and answer the user's question about it." }] };
+        // 🧠 AMBIENT CONTEXT INJECTION
+        // This gives the AI self-awareness of the Discord environment without giving it database access.
+        const systemInstructionText = `You are a specialized developer assistant built directly inside a Discord management bot. 
+You are currently speaking in a secure Direct Message channel. 
+Live Environment Data:
+- The user you are talking to: @${message.author.username}
+- Their Discord User ID: ${message.author.id}
+- Your Bot Client Username: @${client.user?.username}
+- Current Server Time: ${new Date().toLocaleString()}
+
+If the user asks who they are or who is messaging you, use the Live Environment Data above. 
+If the user provides a [CONTEXT MESSAGE] block, you MUST read its contents and analyze it. Do not just explain what a Discord link is. Actually read the text provided in the context block and answer the user's question about it.`;
+
+        const systemInstruction = { parts: [{ text: systemInstructionText }] };
 
         try {
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
