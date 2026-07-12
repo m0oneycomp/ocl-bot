@@ -14,6 +14,7 @@ model Settings {
   hiComRoleId            String? 
   seniorModRoleId        String?
   matchHosterRoleId      String?
+  matchReporterRoleId    String?
   communityVerifyRoleId  String?
   communityVerifyEnabled Boolean @default(false)
   roverApiKey            String?
@@ -24,6 +25,7 @@ model Settings {
   leagueChannelId        String?
   scrimChannelId         String?
   casualChannelId        String?
+  resultsChannelId       String?
 }
 
 model User {
@@ -47,6 +49,8 @@ model League {
   matchType     String    @default("5v5")
   region        String    @default("NA East")
   vipServer     String?
+  proofSubmitted         Boolean  @default(false)
+  shortId                String?
   status        String    @default("PENDING") 
   capacity      Int       @default(10)
   createdAt     DateTime  @default(now())
@@ -77,6 +81,8 @@ model Match {
   leagueId      String
   league        League    @relation(fields: [leagueId], references: [id])
   winningTeam   String
+  teamAScore             Int?
+  teamBScore             Int?
   createdAt     DateTime  @default(now())
   players       MatchPlayer[]
 }
