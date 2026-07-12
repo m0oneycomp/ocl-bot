@@ -31,3 +31,93 @@ Error: Received one or more errors
     at Object.execute (/home/mooneycomp/discord/bots/ocl/ocl-utilities/src/interactions/settings/settings.ts:43:27)
     at async interactionCreateEvent (/home/mooneycomp/discord/bots/ocl/ocl-utilities/src/events/interactionCreate.ts:21:13)
 
+[2026-07-12T06:47:03.966Z] [Global Interaction Handler] ERROR:
+PrismaClientValidationError: 
+Invalid `db.settings.upsert()` invocation in
+/home/mooneycomp/discord/bots/ocl/ocl-utilities/src/events/interactionCreate.ts:228:35
+
+  225     await db.settings.upsert({ where: { id: 'global' }, update: { hiComRoleId: interaction.fields.getTextInputValue('h') || null, matchHosterRoleId: interaction.fields.getTextInputValue('m') || null, communityVerifyRoleId: interaction.fields.getTextInputValue('c') || null }, create: { id: 'global' }});
+  226     return interaction.reply({ content: '✅ Roles saved.', ephemeral: true });
+  227 } else if (interaction.customId === 'modal_channels') {
+→ 228     await db.settings.upsert({
+            where: {
+              id: "global"
+            },
+            update: {
+              rankedChannelId: "1525442518899228693",
+              ~~~~~~~~~~~~~~~
+              leagueChannelId: null,
+              scrimChannelId: null,
+              casualChannelId: null,
+          ?   id?: String | StringFieldUpdateOperationsInput,
+          ?   winPoints?: Int | IntFieldUpdateOperationsInput,
+          ?   losePoints?: Int | IntFieldUpdateOperationsInput,
+          ?   killPoints?: Int | IntFieldUpdateOperationsInput,
+          ?   hiComRoleId?: String | NullableStringFieldUpdateOperationsInput | Null,
+          ?   seniorModRoleId?: String | NullableStringFieldUpdateOperationsInput | Null,
+          ?   matchHosterRoleId?: String | NullableStringFieldUpdateOperationsInput | Null,
+          ?   communityVerifyRoleId?: String | NullableStringFieldUpdateOperationsInput | Null,
+          ?   communityVerifyEnabled?: Boolean | BoolFieldUpdateOperationsInput,
+          ?   roverApiKey?: String | NullableStringFieldUpdateOperationsInput | Null,
+          ?   roverEnabled?: Boolean | BoolFieldUpdateOperationsInput,
+          ?   bloxlinkApiKey?: String | NullableStringFieldUpdateOperationsInput | Null,
+          ?   bloxlinkEnabled?: Boolean | BoolFieldUpdateOperationsInput
+            },
+            create: {
+              id: "global"
+            }
+          })
+
+Unknown argument `rankedChannelId`. Available options are marked with ?.
+    at wn (/home/mooneycomp/discord/bots/ocl/ocl-utilities/node_modules/@prisma/client/runtime/library.js:29:1363)
+    at $n.handleRequestError (/home/mooneycomp/discord/bots/ocl/ocl-utilities/node_modules/@prisma/client/runtime/library.js:121:6958)
+    at $n.handleAndLogRequestError (/home/mooneycomp/discord/bots/ocl/ocl-utilities/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/home/mooneycomp/discord/bots/ocl/ocl-utilities/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/home/mooneycomp/discord/bots/ocl/ocl-utilities/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async interactionCreateEvent (/home/mooneycomp/discord/bots/ocl/ocl-utilities/src/events/interactionCreate.ts:228:17)
+
+[2026-07-12T06:48:42.902Z] [Global Interaction Handler] ERROR:
+PrismaClientValidationError: 
+Invalid `db.settings.upsert()` invocation in
+/home/mooneycomp/discord/bots/ocl/ocl-utilities/src/events/interactionCreate.ts:228:35
+
+  225     await db.settings.upsert({ where: { id: 'global' }, update: { hiComRoleId: interaction.fields.getTextInputValue('h') || null, matchHosterRoleId: interaction.fields.getTextInputValue('m') || null, communityVerifyRoleId: interaction.fields.getTextInputValue('c') || null }, create: { id: 'global' }});
+  226     return interaction.reply({ content: '✅ Roles saved.', ephemeral: true });
+  227 } else if (interaction.customId === 'modal_channels') {
+→ 228     await db.settings.upsert({
+            where: {
+              id: "global"
+            },
+            update: {
+              rankedChannelId: null,
+              ~~~~~~~~~~~~~~~
+              leagueChannelId: null,
+              scrimChannelId: "1525753033059733634",
+              casualChannelId: null,
+          ?   id?: String | StringFieldUpdateOperationsInput,
+          ?   winPoints?: Int | IntFieldUpdateOperationsInput,
+          ?   losePoints?: Int | IntFieldUpdateOperationsInput,
+          ?   killPoints?: Int | IntFieldUpdateOperationsInput,
+          ?   hiComRoleId?: String | NullableStringFieldUpdateOperationsInput | Null,
+          ?   seniorModRoleId?: String | NullableStringFieldUpdateOperationsInput | Null,
+          ?   matchHosterRoleId?: String | NullableStringFieldUpdateOperationsInput | Null,
+          ?   communityVerifyRoleId?: String | NullableStringFieldUpdateOperationsInput | Null,
+          ?   communityVerifyEnabled?: Boolean | BoolFieldUpdateOperationsInput,
+          ?   roverApiKey?: String | NullableStringFieldUpdateOperationsInput | Null,
+          ?   roverEnabled?: Boolean | BoolFieldUpdateOperationsInput,
+          ?   bloxlinkApiKey?: String | NullableStringFieldUpdateOperationsInput | Null,
+          ?   bloxlinkEnabled?: Boolean | BoolFieldUpdateOperationsInput
+            },
+            create: {
+              id: "global"
+            }
+          })
+
+Unknown argument `rankedChannelId`. Available options are marked with ?.
+    at wn (/home/mooneycomp/discord/bots/ocl/ocl-utilities/node_modules/@prisma/client/runtime/library.js:29:1363)
+    at $n.handleRequestError (/home/mooneycomp/discord/bots/ocl/ocl-utilities/node_modules/@prisma/client/runtime/library.js:121:6958)
+    at $n.handleAndLogRequestError (/home/mooneycomp/discord/bots/ocl/ocl-utilities/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/home/mooneycomp/discord/bots/ocl/ocl-utilities/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/home/mooneycomp/discord/bots/ocl/ocl-utilities/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async interactionCreateEvent (/home/mooneycomp/discord/bots/ocl/ocl-utilities/src/events/interactionCreate.ts:228:17)
+
