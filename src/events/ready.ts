@@ -1,22 +1,14 @@
 import { OCLClient } from '../client/OCLClient';
 import { REST, Routes, ChannelType, Message } from 'discord.js';
-import { developerCommand } from '../interactions/developer/developer';
-import { settingsCommand } from '../interactions/settings/settings';
-import { matchCommand } from '../interactions/match/match';
-import { clanCommand } from '../interactions/clan/clan';
-import { strikeCommand } from '../interactions/moderation/strike';
-import { pollCommand } from '../interactions/utility/poll';
-import { hubCommand } from '../interactions/hub/hub';
-import { hicomCommand } from '../interactions/moderation/hicom';
 import { aiMemory } from '../utils/aiMemory';
+import fs from 'fs';
+import path from 'path';
 
 const AUTHORIZED_DEVELOPER_ID = '1197110500333469720';
 
-// 🥷 OMNI-READER: Converts Text, Embeds, Forwards, and Attachments into readable string data
+// 🥷 OMNI-READER
 const extractMessageData = (msg: Message): string => {
     let data = msg.content || '';
-    
-    // Read standard Embeds
     if (msg.embeds && msg.embeds.length > 0) {
         msg.embeds.forEach((e, i) => {
             data += `\n\n[EMBED ${i + 1}]\n`;
@@ -26,8 +18,6 @@ const extractMessageData = (msg: Message): string => {
             if (e.footer) data += `Footer: ${e.footer.text}\n`;
         });
     }
-
-    // Read Native Discord "Forwarded" Messages
     if ('messageSnapshots' in msg && (msg as any).messageSnapshots.size > 0) {
         (msg as any).messageSnapshots.forEach((snap: any, index: number) => {
             data += `\n\n[FORWARDED MESSAGE SNAPSHOT ${index + 1}]\n`;
@@ -42,54 +32,70 @@ const extractMessageData = (msg: Message): string => {
             }
         });
     }
-
-    // List Attachments
     if (msg.attachments && msg.attachments.size > 0) {
         data += `\n\n[ATTACHMENTS]\n`;
         msg.attachments.forEach(a => {
             data += `File: ${a.name} (${a.contentType || 'Unknown Type'}) - URL: ${a.url}\n`;
         });
     }
-
     return data.trim();
 };
 
 export const readyEvent = async (client: OCLClient) => {
     console.log(`[SYS] Connected cleanly as application user: ${client.user?.tag}`);
 
-    const commandCollection = [ developerCommand, settingsCommand, matchCommand, clanCommand, strikeCommand, pollCommand, hubCommand, hicomCommand ];
+    const commandsPayload: any[] = [];
+    const interactionsPath = path.join(__dirname, '../interactions');
 
-    for (const cmd of commandCollection) client.commands.set(cmd.data.name, cmd);
+    // 🔄 DYNAMIC COMMAND SCANNER
+    const loadCommands = (dir: string) => {
+        const files = fs.readdirSync(dir);
+        for (const file of files) {
+            const filePath = path.join(dir, file);
+            const stat = fs.statSync(filePath);
+            if (stat.isDirectory()) {
+                loadCommands(filePath);
+            } else if (file.endsWith('.ts') || file.endsWith('.js')) {
+                const commandModule = require(filePath);
+                // Find the exported object that contains a SlashCommandBuilder 'data' property
+                const command = Object.values(commandModule).find((val: any) => val && val.data && val.data.name);
+                if (command) {
+                    client.commands.set((command as any).data.name, command);
+                    commandsPayload.push((command as any).data.toJSON());
+                }
+            }
+        }
+    };
 
-    const payload = commandCollection.map(cmd => cmd.data.toJSON());
+    try {
+        loadCommands(interactionsPath);
+        console.log(`[SYS] Dynamically loaded ${commandsPayload.length} slash commands.`);
+    } catch (err) {
+        console.error('[CRIT] Failed to scan interactions directory:', err);
+    }
+
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN!);
 
     try {
-        await rest.put(Routes.applicationCommands(process.env.CLIENT_ID!), { body: payload });
+        await rest.put(Routes.applicationCommands(process.env.CLIENT_ID!), { body: commandsPayload });
         console.log('[SYS] Cluster commands deployed. Core engine live and listening.');
     } catch (error) {
         console.error('[CRIT] Core synchronization deployment error:', error);
     }
 
+    // 🥷 STEALTH DM LISTENER
     client.on('messageCreate', async (message: Message) => {
-        if (message.author.bot) return;
-        if (message.channel.type !== ChannelType.DM) return;
-        if (message.author.id !== AUTHORIZED_DEVELOPER_ID) return;
+        if (message.author.bot || message.channel.type !== ChannelType.DM || message.author.id !== AUTHORIZED_DEVELOPER_ID) return;
 
         const apiKey = process.env.GEMINI_API_KEY?.trim();
         if (!apiKey) return;
 
         await message.channel.sendTyping();
 
-        // Use the new Omni-Reader on your DM input
         let finalPrompt = extractMessageData(message);
-        
-        // Failsafe in case a user sends something entirely unreadable
         if (!finalPrompt) finalPrompt = "[User sent a message, but the text/embed content was empty or unreadable by the API.]";
 
         let groundedContext = '';
-
-        // Context Link Parsing (Now uses the Omni-Reader on the fetched link too!)
         const messageUrlRegex = /discord\.com\/channels\/(\d+)\/(\d+)\/(\d+)/;
         const match = message.content.match(messageUrlRegex);
 

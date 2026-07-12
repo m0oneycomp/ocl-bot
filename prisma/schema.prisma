@@ -20,6 +20,10 @@ model Settings {
   roverEnabled           Boolean @default(true)
   bloxlinkApiKey         String?
   bloxlinkEnabled        Boolean @default(false)
+  rankedChannelId        String?
+  leagueChannelId        String?
+  scrimChannelId         String?
+  casualChannelId        String?
 }
 
 model User {
