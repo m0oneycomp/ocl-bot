@@ -1,10 +1,9 @@
-import { Interaction, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, EmbedBuilder, GuildMember, AttachmentBuilder } from 'discord.js';
+import { Interaction, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, EmbedBuilder, GuildMember, AttachmentBuilder, ButtonBuilder, ActionRow } from 'discord.js';
 import { OCLClient } from '../client/OCLClient';
 import { db } from '../database/db';
 import { verifyPlayer } from '../services/verification';
 import { logger } from '../utils/logger';
 import { logCommand } from '../utils/commandLogger';
-import { aiMemory } from '../utils/aiMemory';
 import fs from 'fs';
 
 const AUTHORIZED_DEVELOPER_ID = '1197110500333469720';
@@ -25,6 +24,75 @@ export const interactionCreateEvent = async (client: OCLClient, interaction: Int
         } 
         
         else if (interaction.isButton()) {
+            
+            // INTERACTIVE CANCEL BUTTON LOGIC
+            if (interaction.customId.startsWith('cancel_match_')) {
+                const leagueId = interaction.customId.replace('cancel_match_', '');
+                const league = await db.league.findUnique({ where: { id: leagueId } });
+                
+                if (!league) return interaction.reply({ content: '❌ Match is already closed or cancelled.', ephemeral: true });
+                
+                const isHoster = (interaction.member as GuildMember).permissions.has('Administrator') || interaction.user.id === league.hostId;
+                if (!isHoster) return interaction.reply({ content: '❌ Only the match host or an Admin can cancel this queue.', ephemeral: true });
+
+                await interaction.deferReply({ ephemeral: true });
+                await db.user.updateMany({ where: { activeLeague: league.id }, data: { activeLeague: null, activeTeam: null } });
+                await db.league.delete({ where: { id: league.id } });
+
+                const embed = EmbedBuilder.from(interaction.message.embeds[0]);
+                embed.setColor('#ed4245'); // Red color
+                embed.setDescription(`🚫 **MATCH CANCELLED BY HOST**\n\n~~${embed.data.description}~~`);
+
+                // Grey out and disable all buttons
+                const row = ActionRowBuilder.from(interaction.message.components[0] as any);
+                row.components.forEach((c: any) => c.setDisabled(true));
+
+                await interaction.message.edit({ embeds: [embed], components: [row] });
+                return interaction.editReply('✅ Match successfully cancelled and buttons disabled.');
+            }
+
+            // INTERACTIVE SUB BUTTON LOGIC
+            if (interaction.customId.startsWith('sub_accept_')) {
+                await interaction.deferReply({ ephemeral: true });
+                const [, , leagueId, playerOutId, targetId] = interaction.customId.split('_');
+
+                if (targetId !== 'any' && interaction.user.id !== targetId) {
+                    return interaction.editReply(`❌ This sub request was specifically meant for <@${targetId}>.`);
+                }
+
+                const league = await db.league.findUnique({ where: { id: leagueId } });
+                if (!league) return interaction.editReply('❌ Match is no longer active.');
+
+                const user = await db.user.upsert({ where: { id: interaction.user.id }, update: {}, create: { id: interaction.user.id }});
+                if (user.activeLeague) return interaction.editReply('❌ You are already in an active queue. You cannot sub here.');
+
+                const dbOut = await db.user.findUnique({ where: { id: playerOutId } });
+                if (dbOut?.activeLeague !== league.id) return interaction.editReply('❌ The outgoing player is no longer in the match (they may have already been subbed out).');
+
+                const memberRoles = (interaction.member as GuildMember).roles.cache.map(r => r.id);
+                const authCheck = await verifyPlayer(interaction.user.id, interaction.guildId!, memberRoles);
+                if (!authCheck.verified) return interaction.editReply(`❌ Verification Failed: ${authCheck.message}`);
+
+                await db.user.update({ where: { id: playerOutId }, data: { activeLeague: null, activeTeam: null } });
+                await db.user.update({ where: { id: interaction.user.id }, data: { activeLeague: league.id, activeTeam: dbOut.activeTeam } });
+
+                if (league.vipServer) {
+                    try { await interaction.user.send(`🔒 **OCL Sub Accepted**\nHere is your private server link for the match:\n${league.vipServer}`); } 
+                    catch (e) { /* silent fail on DM */ }
+                }
+
+                // Disable the claim button and mark it as fulfilled
+                const embed = EmbedBuilder.from(interaction.message.embeds[0]);
+                embed.setColor('#2ecc71');
+                embed.setDescription(`✅ **SUBSTITUTE FOUND**\n\n<@${interaction.user.id}> has successfully subbed in for <@${playerOutId}>.`);
+                
+                const row = ActionRowBuilder.from(interaction.message.components[0] as any);
+                row.components.forEach((c: any) => c.setDisabled(true));
+
+                await interaction.message.edit({ embeds: [embed], components: [row] });
+                return interaction.editReply('✅ You successfully claimed the sub spot! Check your DMs for the VIP link.');
+            }
+
             if (interaction.customId.startsWith('join_match_') || interaction.customId.startsWith('leave_match_')) {
                 await interaction.deferReply({ ephemeral: true });
                 const isJoin = interaction.customId.startsWith('join_match_');
@@ -50,7 +118,7 @@ export const interactionCreateEvent = async (client: OCLClient, interaction: Int
                         catch (e) { return interaction.editReply('✅ Joined the queue, but I could not DM you the VIP Server link. Please open your DMs.'); }
                     }
                 } else {
-                    if (interaction.user.id === league.hostId) return interaction.editReply('❌ The match host cannot abandon their own queue. Use `/match manage cancel` if you need to abort the match.');
+                    if (interaction.user.id === league.hostId) return interaction.editReply('❌ The match host cannot abandon their own queue. Use the Cancel Queue button to abort the match.');
                     const user = await db.user.findUnique({ where: { id: interaction.user.id } });
                     if (user?.activeLeague !== leagueId) return interaction.editReply('❌ You are not in this queue.');
                     await db.user.update({ where: { id: interaction.user.id }, data: { activeLeague: null } });
@@ -170,20 +238,14 @@ export const interactionCreateEvent = async (client: OCLClient, interaction: Int
                     }
                 }
 
-                // Clear memory for a fresh conversation block
-                aiMemory.length = 0;
-                
                 const systemInstruction = { parts: [{ text: "You are a specialized developer assistant built directly inside a Discord management bot. You analyze system issues, inspect message contexts, and provide strategic instructions on how to maintain, patch, or configure the application." }] };
                 const fullPromptPayload = `${groundedContext}Developer Request: ${prompt}`;
-
-                // Push initial user query into memory
-                aiMemory.push({ role: 'user', parts: [{ text: fullPromptPayload }] });
 
                 try {
                     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ systemInstruction, contents: aiMemory })
+                        body: JSON.stringify({ systemInstruction, contents: [{ role: 'user', parts: [{ text: fullPromptPayload }] }] })
                     });
 
                     if (!response.ok) {
@@ -196,16 +258,10 @@ export const interactionCreateEvent = async (client: OCLClient, interaction: Int
 
                     if (!aiOutput) return interaction.editReply('❌ Received an empty response from the AI cluster.');
 
-                    // Push AI response into memory
-                    aiMemory.push({ role: 'model', parts: [{ text: aiOutput }] });
-
-                    // DM the user the response instead of putting it in the channel
                     if (aiOutput.length > 2000) {
                         const chunks = aiOutput.match(/[\s\S]{1,1900}/g) || [];
                         await interaction.user.send(chunks[0]);
-                        for (let i = 1; i < chunks.length; i++) {
-                            await interaction.user.send(chunks[i]);
-                        }
+                        for (let i = 1; i < chunks.length; i++) await interaction.user.send(chunks[i]);
                     } else {
                         await interaction.user.send(aiOutput);
                     }
@@ -217,7 +273,6 @@ export const interactionCreateEvent = async (client: OCLClient, interaction: Int
                 return;
             }
 
-            // ... Settings saves
             if (interaction.customId === 'modal_points') {
                 await db.settings.upsert({ where: { id: 'global' }, update: { winPoints: parseInt(interaction.fields.getTextInputValue('w')), losePoints: parseInt(interaction.fields.getTextInputValue('l')), killPoints: parseInt(interaction.fields.getTextInputValue('k')) }, create: { id: 'global', winPoints: parseInt(interaction.fields.getTextInputValue('w')), losePoints: parseInt(interaction.fields.getTextInputValue('l')), killPoints: parseInt(interaction.fields.getTextInputValue('k')) }});
                 return interaction.reply({ content: '✅ Points saved.', ephemeral: true });
