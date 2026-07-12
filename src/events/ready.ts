@@ -57,7 +57,6 @@ export const readyEvent = async (client: OCLClient) => {
                 loadCommands(filePath);
             } else if (file.endsWith('.ts') || file.endsWith('.js')) {
                 const commandModule = require(filePath);
-                // Find the exported object that contains a SlashCommandBuilder 'data' property
                 const command = Object.values(commandModule).find((val: any) => val && val.data && val.data.name);
                 if (command) {
                     client.commands.set((command as any).data.name, command);
